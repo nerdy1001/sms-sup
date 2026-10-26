@@ -1,0 +1,25 @@
+{
+  "name": "minesup-sms",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Scholarship Management System for the Ministry of Higher Education (MINESUP)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "check:rules": "node tools/check.ts",
+    "test": "node --test \"tools/**/*.test.ts\" \"apps/**/*.test.ts\" \"packages/**/*.test.ts\"",
+    "check": "npm run typecheck && npm run check:rules && npm test",
+    "new:module": "node tools/new-module.ts"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.3",
+    "typescript": "6.0.3"
+  }
+}

@@ -1,0 +1,17 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Secrets and local configuration never enter the repository.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
