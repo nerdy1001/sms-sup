@@ -90,6 +90,43 @@ Tests are exempt from `no-console`, `no-process-env`, `no-float-money`, `no-math
 and they may use libraries listed in `devDependencies`. They are still held to the type rules and to
 every other boundary rule.
 
+## Security rules
+
+These run on application and package code (not on tests or `tools`).
+
+| Rule | What it forbids | Instead |
+|---|---|---|
+| `sql-interpolation` | Query text built from values with a template or `+`, passed to `query`, `execute`, `unsafe`, `raw` and similar. | Constant text with parameters ($1, $2). |
+| `weak-hash` | `createHash` with MD4, MD5 or SHA-1; `createHmac` with MD4 or MD5. | SHA-256 or better; argon2 for passwords. |
+| `weak-cipher` | `createCipher`, `createDecipher`, and ECB, DES, RC2, RC4, Blowfish. | `aes-256-gcm` with a random iv. |
+| `dynamic-regexp` | `new RegExp(variable)`. | Escape and limit the input, or avoid a regular expression. |
+| `tls-verification-off` | `rejectUnauthorized: false`, `NODE_TLS_REJECT_UNAUTHORIZED`. | Fix the certificate chain. |
+| `cookie-flags` | A cookie with `httpOnly: false` or `secure: false`. | Session cookies are always httpOnly and secure. |
+| `cors-open` | `origin: "*"` or `origin: true`. | A list of allowed origins. |
+| `insecure-url` | A plain `http://` address except localhost. | HTTPS. |
+
+## Secrets and data files
+
+| Rule | What it forbids | Instead |
+|---|---|---|
+| `secret-<kind>` (for example `secret-aws-access-key`, `secret-jwt`, `secret-credential-url`, `secret-secret-assignment`) | A key, token, signed token, or password in any text file, and in any commit of the history. | Read it from the environment (kernel configuration) and rotate it if it was ever real. |
+| `secret-file` | `.env` files (but not `.env.example`), key and certificate files, private SSH keys. | Keep them outside the repository. |
+| `data-file` | Spreadsheets, database files and dumps (error); CSV files (warning). | Synthetic data only (task FN-08). |
+
+## Dependencies
+
+| Rule | What it forbids | Instead |
+|---|---|---|
+| `dependency-not-exact` | A version range or tag (`^1.2.0`, `latest`) in a `package.json`. | An exact version. |
+| `dependency-source` | A dependency from git, a URL, a file path or an alias. | The npm registry only. |
+| `lockfile-source`, `lockfile-integrity` | A locked package from outside the registry, or without an integrity hash. | Regenerate the lock file from the registry. |
+| `lockfile-missing` | (Warning.) No `package-lock.json`. | `npm install`, then commit the file. |
+| `npmrc-policy` | `.npmrc` without `ignore-scripts=true` and `save-exact=true`. | Restore the settings. |
+| `accepted-risk` | A malformed, expired or too long (over 90 days) entry in `security/accepted-risks.json`. | Fix the cause, or decide again with a new date. |
+
+The audit job adds a rule the files cannot show: a high or critical vulnerability in a production
+dependency blocks the merge unless it is accepted in `security/accepted-risks.json`.
+
 ## Suppressing a rule
 
 A coding standard can be suppressed on one line, with a reason that is written down:
@@ -100,6 +137,12 @@ The suppression covers its own line, or the next line when the comment stands al
 without a reason of at least ten characters is itself an error. A suppression that matches nothing
 is a warning. Every suppression in use is printed at the end of each run, so it stays visible in
 review.
+
+Security rules use the same form with their own word: `// security-ignore: <rule> -- <reason>`. A value
+that only looks like a secret (a documented example) uses `secrets-allow: <rule> -- <reason>` on its
+line or the line before, where the rule is the kind without the `secret-` prefix (for example
+`aws-access-key`). A false alarm in the history, or an advisory that cannot be fixed yet, is accepted in
+`security/accepted-risks.json` for at most 90 days, with a reason of at least 20 characters.
 
 Architecture rules (zones, modules, layers, network, database, schemas) cannot be suppressed in a
 comment. They change in `tools/rules.config.ts` or in a `module.json`, in a pull request that

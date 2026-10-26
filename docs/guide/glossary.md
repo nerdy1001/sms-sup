@@ -47,6 +47,14 @@ Words used in this project and this repository.
 | **Strict mode** | TypeScript settings that make the compiler catch more mistakes. |
 | **Suppression** | A comment that silences one coding rule on one line, with a written reason. |
 | **ADR** | Architecture decision record: a short note saying what was decided, why, and what it costs. |
+| **Advisory** | A published report of a security flaw in a library, usually with an id like GHSA-xxxx-xxxx-xxxx and the version that fixes it. |
+| **Audit** | `npm audit`: comparing the libraries in the lock file with the list of advisories. |
+| **Accepted risk** | A known problem you decided to live with for a limited time. It is written in `security/accepted-risks.json` with a reason and an expiry date. |
+| **Secret scan** | A search for keys, tokens and passwords in the files and in every commit of the history. |
+| **Entropy** | A measure of how random a text looks. Keys and tokens score high, ordinary words score low. The secret scan uses it to avoid flagging normal text. |
+| **Dependabot** | A GitHub service that opens pull requests when a library has a new version. |
+| **Cooldown** | A delay before Dependabot proposes a new release, so that a broken or malicious version is noticed by others first. |
+| **ReDoS** | A pattern that can freeze a server when it receives a crafted input. The rule `dynamic-regexp` guards against building patterns from input. |
 | **CI** | Continuous integration: the automatic checks that GitHub runs on every pull request. |
 | **Pull request** | A proposal to merge a branch into `main`. The checks run on it. |
 | **Squash merge** | Merging a branch as one commit whose message is the pull request title. |

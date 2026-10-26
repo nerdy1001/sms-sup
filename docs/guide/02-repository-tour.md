@@ -12,6 +12,7 @@ minesup-sms/
   tools/               the checks, the module generator, their tests
   docs/                this documentation and the reasons behind decisions
   .github/             automatic checks and settings for GitHub
+  security/            accepted-risks.json: risks that are accepted for a limited time
   package.json  tsconfig*.json  .npmrc  .nvmrc  .editorconfig  .gitignore  .gitattributes
   README.md  CONTRIBUTING.md
 ```
@@ -58,6 +59,13 @@ The robot and its helpers. You will rarely edit it, but you will run it all the 
 | `checks/sql.ts` | Checks that SQL only touches the module's own database schema. |
 | `checks/standards.ts` | Small coding rules (no `any`, no `console.log`, no decimal money) and whitespace. |
 | `checks/docs.ts` | Checks that the documentation is complete and its links work (see [../README.md](../README.md)). |
+| `checks/security.ts` | Eight security rules for application code (weak hashes, switched-off certificate checks, queries built from values and so on). |
+| `checks/secrets.ts`, `lib/secrets.ts` | Finds keys, tokens and passwords in files, and files that must never be committed. |
+| `checks/dependencies.ts` | Checks that dependencies are pinned, come from the npm registry, and match the lock file rules. |
+| `scan-history.ts` | The secret scan over every commit of the history (`npm run scan:secrets`). |
+| `audit.ts` | Asks npm about known vulnerabilities and applies the blocking policy (`npm run audit:deps`). |
+| `dependabot-policy.ts` | Decides whether an update from Dependabot may merge by itself. |
+| `notify-slack.ts` | Posts a failure message to Slack. |
 | `lib/` | Shared helpers: reading files, finding imports with the TypeScript parser, working out where a file sits. |
 | `new-module.ts` | The generator: `npm run new:module -- RG` builds a module in the standard layout. |
 | `check-pr-title.ts` | Checks that a pull request title looks like `feat(rg): add scholar identifier`. |

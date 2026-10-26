@@ -1,10 +1,11 @@
-# Minimum checks for task FN-01. Task FN-02 extends this file with dependency, static and secret scans.
+# The pipeline of tasks FN-01 and FN-02. Every job must pass before code is merged.
+# Job names are referenced in docs/github-setup.md; keep them in step.
 name: ci
 
 on:
   pull_request:
   push:
-    branches: [master]
+    branches: [main]
 
 permissions:
   contents: read
@@ -14,6 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Types, architecture rules, coding standards, static security rules, the secret scan of the
+  # working tree, the dependency rules and the tests (npm run check runs the same list).
   checks:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -29,10 +32,44 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Types
         run: npm run typecheck
-      - name: Architecture and coding rules
+      - name: Architecture, coding, security, secret and dependency rules
         run: npm run check:rules
       - name: Tests
         run: npm test
+
+  # Known vulnerabilities in the dependencies. The list of advisories changes without any change
+  # to the code, so the same job also runs every day (audit-schedule.yml).
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Dependency audit (high and critical in production block)
+        run: npm run audit:deps
+
+  # Secrets in the whole history, not only in the files as they are now.
+  secret-history:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Secret scan of every commit
+        run: npm run scan:secrets
 
   pr-title:
     if: github.event_name == 'pull_request'
@@ -49,3 +86,55 @@ jobs:
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: node tools/check-pr-title.ts
+
+  # A Dependabot pull request merges by itself once every job above has passed, if it is a patch
+  # or minor update that touches only dependency files (tools/dependabot-policy.ts). The merge is
+  # made here, after the jobs, because branch protection with required checks, which would
+  # normally hold an automatic merge back, is not available for private repositories on the free
+  # plan. Do not add steps that run code from the pull request other than the policy script,
+  # which Dependabot cannot change (it only edits dependency files).
+  dependabot-merge:
+    if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]'
+    needs: [checks, audit, secret-history, pr-title]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Decide and merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          gh pr view "$PR_URL" --json commits --jq '.commits[].messageBody' > "$RUNNER_TEMP/messages.txt"
+          gh pr diff "$PR_URL" --name-only > "$RUNNER_TEMP/files.txt"
+          if node tools/dependabot-policy.ts "$RUNNER_TEMP/messages.txt" "$RUNNER_TEMP/files.txt"; then
+            gh pr merge "$PR_URL" --squash --delete-branch
+          else
+            echo "Left open for a human review."
+          fi
+
+  # A failure on main goes to Slack. Without the SLACK_WEBHOOK_URL secret the step is skipped.
+  notify:
+    if: failure() && github.event_name == 'push'
+    needs: [checks, audit, secret-history]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Tell Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: node tools/notify-slack.ts

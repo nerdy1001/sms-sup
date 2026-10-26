@@ -5,6 +5,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # A release younger than this is not proposed, which gives the community time to find a
+    # compromised or broken version before it reaches this repository.
+    cooldown:
+      default-days: 5
     commit-message:
       prefix: "chore(deps)"
     groups:
@@ -14,5 +18,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 5
     commit-message:
       prefix: "ci(deps)"

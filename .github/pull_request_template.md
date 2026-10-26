@@ -10,3 +10,4 @@
 - [ ] New dependency? It is pinned to an exact version and the reason is written above
 - [ ] Changed a module dependency, a boundary rule or a suppression? The reason is written above
 - [ ] Changed behaviour that the Ministry will see? The documentation and the delivery plan are updated
+- [ ] Task finished? The record in `docs/tasks/`, the row in `docs/progress.md` and the affected guide pages are updated

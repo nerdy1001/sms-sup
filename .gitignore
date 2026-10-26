@@ -15,3 +15,12 @@ coverage/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Data files that may hold personal data of scholars. Only synthetic data is committed (task FN-08).
+*.xlsx
+*.xls
+*.ods
+*.dump
+*.bak
+*.sqlite
+*.sqlite3

@@ -1,6 +1,7 @@
 # 4. The checks: what runs, and how to read it
 
-`npm run check` runs three things in order. It stops being friendly only when something is wrong.
+`npm run check` runs three things in order. It stops being friendly only when something is wrong. Two
+more scans run only on GitHub, because they need the internet or the whole history (see below).
 
 | Step | Command | What it answers |
 |---|---|---|
@@ -8,7 +9,7 @@
 | 2. Rules | `npm run check:rules` | Does the code respect the architecture and the coding standards? |
 | 3. Tests | `npm test` | Do the tests, including the tests of the checks themselves, pass? |
 
-GitHub runs the same three steps on every pull request.
+GitHub runs the same three steps on every pull request, plus the extra scans.
 
 ## How the rules robot works
 
@@ -20,7 +21,7 @@ find the facts it needs:
 3. every comment (to find suppressions and forbidden directives),
 4. a few forms of code, such as `process.env` or `console.log`.
 
-It compares those facts with the rules in `tools/rules.config.ts` and prints a list. Five parts:
+It compares those facts with the rules in `tools/rules.config.ts` and prints a list. Eight parts:
 
 | Part | Looks at | Example of what it catches |
 |---|---|---|
@@ -29,8 +30,21 @@ It compares those facts with the rules in `tools/rules.config.ts` and prints a l
 | `sql` | SQL files and SQL strings in infrastructure code | A query on another module's tables. A table created without a schema name. |
 | `standards` | TypeScript source and text files | `any`, `console.log`, `Math.random`, tabs, trailing spaces. |
 | `docs` | The documentation | A finished task without a record. A link to a file that does not exist. |
+| `security` | TypeScript source | A query built from values. A weak hash. Certificate checking switched off. An open CORS setting. |
+| `secrets` | Every text file, and file names | A key or password in a file. A `.env` file. A spreadsheet that may hold scholar data. |
+| `dependencies` | `package.json` files, the lock file, `.npmrc` | A version range. A library from a git address. A locked package without an integrity hash. |
 
 Run one part only: `node tools/check.ts --only imports,sql`.
+
+## The scans that run only on GitHub
+
+| Job | What it does | Why it is separate |
+|---|---|---|
+| `audit` | Asks npm whether any library has a known vulnerability. A high or critical one in a library the application uses blocks the merge; others only warn. | It needs the internet, and the answer changes from day to day, so it also runs once a day on its own. |
+| `secret-history` | Reads every line ever added in every commit on every branch, looking for secrets. | A secret that was committed and removed is still in the history, and still leaked. |
+
+You can run both on your computer: `npm run audit:deps` (needs internet and a lock file) and
+`npm run scan:secrets` (needs a git repository with its history).
 
 ## Reading a result
 
@@ -62,24 +76,37 @@ saying what is wrong and usually what to do instead.
 | `circular-import` | Two files import each other. | Extract the shared part into a third file. Type-only imports (`import type`) do not count. |
 | `no-any`, `no-non-null` | `any` or the `!` operator. | Use `unknown` and check the value. |
 | `whitespace` | Tabs, trailing spaces, wrong line endings. | Fix the editor setting; `.editorconfig` already says what is expected. |
+| `sql-interpolation` | Query text built from values. | Write the text once and pass the values as parameters. |
+| `secret-...` (for example `secret-aws-access-key`) | The scan found something that looks like a key or password. The report shows only its first four characters. | Remove it, read it from the environment, and if it was ever real, rotate it: deleting it does not undo the leak. |
+| `secret-file`, `data-file` | A `.env`, key, spreadsheet or database file is in the repository. | Remove it from git and keep it outside the repository. |
+| `dependency-not-exact`, `dependency-source` | A version range, or a library from outside the npm registry. | Pin an exact version from the registry. |
+| `accepted-risk` | An entry in `security/accepted-risks.json` is malformed, expired or too long. | Fix the cause, or decide again and set a new date (at most 90 days). |
 | `doc-task-record`, `doc-broken-link` | The documentation is incomplete or has a dead link. | See [../README.md](../README.md). |
 
-## Suppressing a coding rule
+## Suppressing a rule
 
-Only the small coding standards can be silenced, and only with a written reason:
+Only the small coding standards and the security rules can be silenced, and only with a written reason:
 
 ```
 // standards-ignore: no-any -- the vendor callback has no usable type, see issue 42
+// security-ignore: cors-open -- public read-only endpoint, no cookies, reviewed with the Ministry
 ```
+
+A value that only looks like a secret (a documented example) is allowed with
+`secrets-allow: <rule> -- <reason>` on its line or the line before. A vulnerability that cannot be fixed
+yet, or a false alarm found in history, goes in `security/accepted-risks.json` with a reason and an
+expiry date no more than 90 days away. When the date passes, the check fails and the decision is made
+again. Every exception in use is printed at the end of each run.
 
 Architecture rules (zones, modules, layers, network, database) cannot be silenced with a comment.
 They change in `tools/rules.config.ts` or a `module.json`, in a pull request that explains why.
 
 ## Can the robot be wrong?
 
-Yes. Two known limits: it cannot see SQL assembled from several variables (task FN-04 adds a query
-helper that closes this), and it judges only what it can read, so it cannot tell whether a field is
-personal data. Those judgements stay in the pull request checklist. If a rule blocks something that is
+Yes. Known limits: it cannot see SQL assembled from several variables beyond the plain template and
+`+` cases (task FN-04 adds a query helper that closes this), it knows about ten kinds of secret where a
+dedicated scanner knows hundreds, and it judges only what it can read, so it cannot tell whether a
+field is personal data. Those judgements stay in the pull request checklist. If a rule blocks something that is
 right, do not fight the rule in the middle of a feature. Finish the feature another way, then open a
 separate pull request to change the rule.
 

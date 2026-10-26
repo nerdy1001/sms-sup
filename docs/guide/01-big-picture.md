@@ -59,7 +59,7 @@ The repository answers this in two ways:
 2. **A robot that enforces it.** A set of automatic checks fails the build when the structure is
    broken. The reasons are written down, so the rules are explained, not just imposed.
 
-That robot, and the folders it protects, are what task FN-01 delivered.
+That robot, and the folders it protects, are what task FN-01 delivered. Task FN-02 added the security scans around it: dependencies, insecure code and secrets.
 
 ## How a change travels
 

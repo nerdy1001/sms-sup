@@ -16,7 +16,7 @@ together in the same pull request.
 
 - [progress.md](progress.md): the list of tasks, with their status.
 - [tasks/](tasks/): one record per task. Each says what was asked, what was built, how it works, why,
-  how to check it, what was left out and what comes next. Start with [tasks/FN-01.md](tasks/FN-01.md).
+  how to check it, what was left out and what comes next. Start with [tasks/FN-01.md](tasks/FN-01.md); the latest is [tasks/FN-02.md](tasks/FN-02.md).
 
 ## Reference
 

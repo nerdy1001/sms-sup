@@ -11,7 +11,7 @@ explains how to work with them.
 3. The pull request title follows `type(scope): subject`, for example `feat(rg): add scholar
    identifier`. The scope is the module code in lowercase (`rg`, `cm`, `fn` and so on). The title
    becomes the commit message, because pull requests are merged by squashing.
-4. Merge when `checks` and `pr-title` are green. Delete the branch.
+4. Merge when `checks`, `audit`, `secret-history` and `pr-title` are green. Delete the branch.
 
 Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `build`, `ci`, `perf`, `security`, `revert`.
 Add `!` after the scope for a change that breaks something others depend on.
@@ -20,8 +20,9 @@ Add `!` after the scope for a change that breaks something others depend on.
 
     npm run check
 
-It runs the type check, the architecture and coding rules, and the tests, which is exactly what the
-workflow runs. Fix failures at the cause. Do not weaken a rule to make a change pass: if a rule is
+It runs the type check, the architecture, coding, security, secret and dependency rules, the
+documentation check and the tests, which is what the `checks` job runs. The `audit` and `secret-history`
+jobs have their own commands (`npm run audit:deps`, `npm run scan:secrets`). Fix failures at the cause. Do not weaken a rule to make a change pass: if a rule is
 wrong, change it in its own pull request, with the reason (docs/boundaries.md explains how).
 
 ## Definition of done for a task
@@ -32,6 +33,9 @@ wrong, change it in its own pull request, with the reason (docs/boundaries.md ex
   would accept.
 - Nothing personal in code, tests, fixtures, logs or error messages. Test data is synthetic (FN-08).
 - The module README says what the module owns, and the module map is still true.
+- The documentation is updated (see docs/README.md): the task record in docs/tasks, the row in
+  docs/progress.md, and any guide page, glossary entry or reference page the change made untrue.
+  `npm run check` verifies that records, the progress log and links agree.
 - The pull request template is complete.
 
 ## Coding standards
@@ -60,6 +64,10 @@ Every dependency is an attack surface that the Ministry cannot monitor. Before a
 2. Is it maintained, widely used and small? Look at its own dependencies too.
 3. Add it to the `dependencies` of the one package that uses it, with an exact version (the
    repository's `.npmrc` does this by default), and write the reason in the pull request.
+
+Dependabot merges patch and minor updates by itself once every check passes; major updates wait for you.
+A vulnerability that blocks the pipeline is fixed, or accepted for at most 90 days in
+`security/accepted-risks.json` with a written reason.
 
 Install scripts of dependencies never run (`ignore-scripts` in `.npmrc`). If a dependency cannot work
 without one, that is a reason to choose another dependency.

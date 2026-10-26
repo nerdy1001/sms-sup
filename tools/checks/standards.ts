@@ -4,9 +4,9 @@ import { collectComments, type SourceComment } from "../lib/comments.ts";
 import { lineOf, parseSource } from "../lib/imports.ts";
 import { locate, type Where } from "../lib/layout.ts";
 import { finding, type CheckResult, type Finding, type Suppression } from "../lib/model.ts";
+import { applySuppressions } from "../lib/suppressions.ts";
 import { rules } from "../rules.config.ts";
 
-const SUPPRESSION = /standards-ignore:\s*([a-z-]+)(?:\s*--\s*([^*]*))?/;
 const TEXT_EXTENSIONS = [".ts", ".json", ".md", ".yml", ".yaml", ".sql", ".mjs", ".cjs", ".js"];
 const TEXT_DOTFILES = [".editorconfig", ".gitignore", ".gitattributes", ".npmrc", ".nvmrc"];
 
@@ -115,7 +115,7 @@ function checkSourceFile(file: string, text: string): CheckResult {
 
   const comments = collectComments(sourceFile);
   checkTypeScriptDirectives(file, comments, found);
-  return applySuppressions(file, comments, found);
+  return applySuppressions(file, comments, found, "standards-ignore");
 }
 
 function checkTypeScriptDirectives(file: string, comments: readonly SourceComment[], found: Finding[]): void {
@@ -128,39 +128,6 @@ function checkTypeScriptDirectives(file: string, comments: readonly SourceCommen
       found.push(finding("no-ts-ignore", file, "An expect-error directive needs a reason of at least 10 characters after it.", comment.line));
     }
   }
-}
-
-function applySuppressions(file: string, comments: readonly SourceComment[], found: Finding[]): CheckResult {
-  const active: { rule: string; reason: string; lines: number[]; line: number; used: boolean }[] = [];
-  const extra: Finding[] = [];
-  for (const comment of comments) {
-    const match = SUPPRESSION.exec(comment.text);
-    if (match === null) continue;
-    const reason = (match[2] ?? "").trim();
-    if (reason.length < 10) {
-      extra.push(finding("suppression-reason", file, 'A suppression needs a reason: "standards-ignore: <rule> -- <reason of at least 10 characters>".', comment.line));
-      continue;
-    }
-    active.push({ rule: match[1] ?? "", reason, line: comment.line, lines: comment.ownLine ? [comment.line, comment.line + 1] : [comment.line], used: false });
-  }
-
-  const kept: Finding[] = [];
-  const applied: Suppression[] = [];
-  for (const item of found) {
-    const suppression = active.find((entry) => entry.rule === item.rule && item.line !== undefined && entry.lines.includes(item.line));
-    if (suppression === undefined) {
-      kept.push(item);
-    } else {
-      suppression.used = true;
-      applied.push({ rule: item.rule, file, line: suppression.line, reason: suppression.reason });
-    }
-  }
-  for (const entry of active) {
-    if (!entry.used) {
-      extra.push(finding("unused-suppression", file, `This suppression of "${entry.rule}" matches nothing. Remove it.`, entry.line, "warning"));
-    }
-  }
-  return { findings: [...kept, ...extra], suppressions: applied };
 }
 
 function checkWhitespace(root: string): Finding[] {

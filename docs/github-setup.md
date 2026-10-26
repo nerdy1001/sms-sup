@@ -1,7 +1,7 @@
 # GitHub setup (once)
 
 Settings that cannot live in the repository. Apply them when the repository is created. The names
-`checks` and `pr-title` are the job names in `.github/workflows/ci.yml`.
+`checks`, `audit`, `secret-history` and `pr-title` are the job names in `.github/workflows/ci.yml`.
 
 ## Account
 
@@ -13,10 +13,15 @@ Settings that cannot live in the repository. Apply them when the repository is c
 ## Repository
 
 - **Private.** The code describes the Ministry's internal system.
-- **Code and automation > Rulesets > New branch ruleset** for `main`:
+- **Code and automation > Rulesets > New branch ruleset** for `main`. **Plan check first:** on the
+  free plan, private repositories cannot use rulesets or branch protection, and the page will say so
+  (GitHub changes its plans from time to time, so trust the page over this note). Without it, nothing
+  stops a direct push to `main`: the checks run afterwards and Slack tells you. Options: a paid plan,
+  or the discipline of working only through pull requests. If the page is available:
   - Require a pull request before merging. Required approvals: 0 while you are the only developer
     (the checks are the gate); raise it to 1 as soon as there is a second person.
-  - Require status checks to pass: `checks` and `pr-title`. Require branches to be up to date.
+  - Require status checks to pass: `checks`, `audit`, `secret-history` and `pr-title`. Require branches
+    to be up to date.
   - Block force pushes. Restrict deletions.
   - Require linear history.
   - Do not allow bypass, including for administrators. A rule you can switch off at midnight is a
@@ -26,14 +31,39 @@ Settings that cannot live in the repository. Apply them when the repository is c
 - **Actions > General**: allow GitHub-owned actions and the ones named in the workflow only;
   "Read repository contents" as the default token permission; require approval for workflows from
   outside collaborators.
-- **Code security**: enable Dependabot alerts, Dependabot security updates, secret scanning and push
-  protection, and private vulnerability reporting.
+- **Code security**: enable Dependabot alerts and Dependabot security updates (free for private
+  repositories). Secret scanning with push protection and code scanning are paid features for private
+  repositories; switch them on if your plan has them, in addition to the checks of this repository.
+  Without them, the secret scan of the pipeline runs after a push, so a secret that is pushed must be
+  treated as leaked and rotated.
+
+## Slack notifications (task FN-02)
+
+1. In Slack, create an incoming webhook for the channel that should receive failures (Slack's app
+   directory, "Incoming Webhooks"). Treat the address as a password.
+2. In GitHub: **Settings > Secrets and variables > Actions > New repository secret**. Name:
+   `SLACK_WEBHOOK_URL`. Value: the webhook address.
+3. Test it: **Actions > audit-schedule > Run workflow**. The message is sent only when a job fails, so
+   to see one, temporarily list a made-up failure, or wait for the first real failure.
+
+Without the secret, the notify step prints a note and passes. The script sends only to addresses that
+start with `https://hooks.slack.com/services/` or `/workflows/`.
 
 ## Pull request flow
 
-Dependabot opens pull requests titled `chore(deps): ...`; they pass the title check. Read what changed
-in a dependency before merging an update, especially its install scripts and its own new
-dependencies. Updating a library is a security decision, not housekeeping.
+Pull requests from Dependabot, titled `chore(deps): ...` or `ci(deps): ...`, merge by themselves when
+every job passes and the update is a patch or a minor update of dependency files only (the rules are in
+`tools/dependabot-policy.ts`). Major updates, updates of 0.x packages and anything else stay open for
+you. Read what changed in a dependency before merging a major update, especially its install scripts and
+its own new dependencies. Updating a library is a security decision, not housekeeping.
+
+The merge is made by the workflow itself, after the jobs. It needs no setting beyond the permissions
+already written in `ci.yml`. If the merge step fails with a permission error, check **Settings > Actions
+> General > Workflow permissions** and that no organization policy forbids the permissions the job asks
+for.
+
+If a vulnerability blocks every pull request, fix the dependency, or accept the risk for up to 90 days
+in `security/accepted-risks.json` with a written reason (see [boundaries.md](boundaries.md)).
 
 ## Secrets
 

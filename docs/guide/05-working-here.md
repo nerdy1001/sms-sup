@@ -3,9 +3,8 @@
 ## First time on a machine
 
 1. Install Node.js 22.18 or later. The file `.nvmrc` says 22. Check with `node --version`.
-2. In the repository folder run `npm install`. The first person to do this also commits the
-   `package-lock.json` it creates; it records the exact versions of every library, and the automatic
-   checks refuse to run without it.
+2. In the repository folder run `npm install`. The file `package-lock.json` records the exact versions
+   of every library, and the automatic checks refuse to run without it. Commit it if it changes.
 3. Run `npm run check`. If it passes, your machine is ready.
 
 ## Commands
@@ -29,7 +28,7 @@
 6. **Run `npm run check`** often, not only at the end. Fix at the cause.
 7. **Update the documentation** (below). It is part of done.
 8. **Open a pull request** titled `feat(rg): short description`. Tick the checklist.
-9. **Merge** when GitHub shows `checks` and `pr-title` green.
+9. **Merge** when GitHub shows `checks`, `audit`, `secret-history` and `pr-title` green.
 10. **Mark the task complete** in the progress log once you have accepted the work. See below.
 
 ## Documentation is part of done
@@ -50,8 +49,31 @@ record, if a record has no row, or if a link in any Markdown file is dead.
 ## When the automatic checks fail on GitHub
 
 1. Open the failed step and read the message. It is the same text you see locally.
-2. Run `npm run check` locally. It should fail in the same way.
+2. Run `npm run check` locally. It should fail in the same way. (The `audit` and `secret-history` jobs
+   have their own commands: `npm run audit:deps` and `npm run scan:secrets`.)
 3. Fix it, push, and wait for green. Do not merge around a red check, even alone, even at night.
+
+### If a secret was found
+
+Treat it as leaked, whatever the file or the commit. Change the real password or key first (a deleted
+line is still in the history, and anyone with a copy of the repository has it). Then remove it from the
+code, and read it from configuration instead. Only after that, deal with the history: if it was a false
+alarm, accept it by its id in `security/accepted-risks.json`.
+
+### If the audit blocks everything
+
+A new vulnerability in a library you use can fail every pull request on the same day, because the list
+of known vulnerabilities changes without any change to your code. In order of preference: update the
+library (the report names the advisory and usually the fixed version), replace it, or accept the risk in
+`security/accepted-risks.json` with a reason and a date within 90 days. The file is checked: a vague
+reason or an expired date fails the build.
+
+### Dependabot
+
+It opens a pull request when a library has a new version. If it is a patch or minor update and every
+check is green, the pipeline merges it by itself. A major update, an update of a 0.x library, or
+anything that touches code stays open for you. Read the release notes of a major update before
+merging.
 
 ## Changing a rule
 
@@ -61,8 +83,9 @@ example how zones are separated), add a decision record in `docs/adr/` as well.
 
 ## Things never to do
 
-- Commit a secret, a key, a real scholar's data or a `.env` file. A secret that was committed is leaked,
-  even after you delete it: rotate it.
+- Commit a secret, a key, a real scholar's data, a spreadsheet or a `.env` file. A secret that was
+  committed is leaked, even after you delete it: rotate it. The checks catch most of these, not all.
 - Put personal data in a log, an error message, a test or a screenshot.
-- Switch off a check "just for now".
+- Switch off a check "just for now". If you must accept a risk, write it in `security/accepted-risks.json`
+  with a date: it expires by itself.
 - Add a library without thinking: each is something the Ministry cannot monitor. See CONTRIBUTING.md.
