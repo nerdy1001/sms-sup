@@ -29,7 +29,7 @@
     "db:psql": "docker compose -f infra/local/compose.yaml exec postgres psql -U sms sms"
   },
   "devDependencies": {
-    "@types/node": "26.6.3",
+    "@types/node": "26.6.5",
     "typescript": "6.0.3"
   }
 }
