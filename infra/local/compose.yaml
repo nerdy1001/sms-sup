@@ -9,7 +9,7 @@ name: sms-local
 
 services:
   postgres:
-    image: postgres:17.5-alpine
+    image: postgres:18.4-alpine
     environment:
       POSTGRES_USER: sms
       POSTGRES_DB: sms
