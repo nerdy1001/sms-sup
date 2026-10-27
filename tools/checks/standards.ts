@@ -7,8 +7,8 @@ import { finding, type CheckResult, type Finding, type Suppression } from "../li
 import { applySuppressions } from "../lib/suppressions.ts";
 import { rules } from "../rules.config.ts";
 
-const TEXT_EXTENSIONS = [".ts", ".json", ".md", ".yml", ".yaml", ".sql", ".mjs", ".cjs", ".js"];
-const TEXT_DOTFILES = [".editorconfig", ".gitignore", ".gitattributes", ".npmrc", ".nvmrc"];
+const TEXT_EXTENSIONS = [".ts", ".json", ".md", ".yml", ".yaml", ".sql", ".mjs", ".cjs", ".js", ".sh"];
+const TEXT_DOTFILES = [".editorconfig", ".gitignore", ".gitattributes", ".npmrc", ".nvmrc", ".dockerignore", "Dockerfile", "Caddyfile"];
 
 function inStandardsScope(file: string): boolean {
   return file.endsWith(".ts") && !file.endsWith(".d.ts") && /^(apps\/[^/]+\/src|packages\/[^/]+\/src|tools)\//.test(file);

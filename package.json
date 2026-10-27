@@ -18,7 +18,15 @@
     "check": "npm run typecheck && npm run check:rules && npm test",
     "new:module": "node tools/new-module.ts",
     "audit:deps": "node tools/audit.ts",
-    "scan:secrets": "node tools/scan-history.ts"
+    "scan:secrets": "node tools/scan-history.ts",
+    "render:cloud-init": "node tools/render-cloud-init.ts",
+    "db:up": "docker compose -f infra/local/compose.yaml up -d --wait postgres",
+    "db:down": "docker compose -f infra/local/compose.yaml down",
+    "db:status": "node tools/db/cli.ts status",
+    "db:migrate": "node tools/db/cli.ts migrate",
+    "db:seed": "node tools/db/cli.ts seed",
+    "db:reset": "node tools/db/cli.ts reset",
+    "db:psql": "docker compose -f infra/local/compose.yaml exec postgres psql -U sms sms"
   },
   "devDependencies": {
     "@types/node": "26.6.3",

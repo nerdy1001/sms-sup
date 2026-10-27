@@ -66,6 +66,9 @@ Every dependency is an attack surface that the Ministry cannot monitor. Before a
    repository's `.npmrc` does this by default), and write the reason in the pull request.
 
 Dependabot merges patch and minor updates by itself once every check passes; major updates wait for you.
+A merge to `main` deploys to staging by itself, so never merge a change you would not want running there.
+Changes to the database are new numbered migrations (never an edit of one that was applied), and every new
+table needs row-level security and policies. See docs/runbooks/local-database.md.
 A vulnerability that blocks the pipeline is fixed, or accepted for at most 90 days in
 `security/accepted-risks.json` with a written reason.
 

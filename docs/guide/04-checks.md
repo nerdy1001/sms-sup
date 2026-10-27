@@ -21,7 +21,7 @@ find the facts it needs:
 3. every comment (to find suppressions and forbidden directives),
 4. a few forms of code, such as `process.env` or `console.log`.
 
-It compares those facts with the rules in `tools/rules.config.ts` and prints a list. Eight parts:
+It compares those facts with the rules in `tools/rules.config.ts` and prints a list. Ten parts:
 
 | Part | Looks at | Example of what it catches |
 |---|---|---|
@@ -33,6 +33,8 @@ It compares those facts with the rules in `tools/rules.config.ts` and prints a l
 | `security` | TypeScript source | A query built from values. A weak hash. Certificate checking switched off. An open CORS setting. |
 | `secrets` | Every text file, and file names | A key or password in a file. A `.env` file. A spreadsheet that may hold scholar data. |
 | `dependencies` | `package.json` files, the lock file, `.npmrc` | A version range. A library from a git address. A locked package without an integrity hash. |
+| `migrations` | SQL files in `migrations` and `seeds` folders | A table without row-level security. A gap in the numbering. A `begin` in a migration. A seed that cannot be run twice. |
+| `infra` | Files in `infra/` | An image without a version. A port open to every address. A container with extra powers. A password in a file. A stale `cloud-init.yaml`. |
 
 Run one part only: `node tools/check.ts --only imports,sql`.
 

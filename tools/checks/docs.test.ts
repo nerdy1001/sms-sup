@@ -68,6 +68,11 @@ describe("task records", () => {
     assert.ok(found.some((item) => /first line must be a heading/.test(item.message)));
   });
 
+  test("the status In progress is accepted when the log and the record agree", () => {
+    const found = run({ "docs/progress.md": progress(row("FN-01", "In progress")), "docs/tasks/FN-01.md": record("FN-01", "In progress (2026-10-26)") });
+    assert.deepEqual(found, []);
+  });
+
   test("a status or date that differs between the log and the record", () => {
     const found = run({ "docs/progress.md": progress(row("FN-01", "Complete", "2026-11-01")), "docs/tasks/FN-01.md": record("FN-01") });
     assert.ok(found.some((item) => /differs from the progress log/.test(item.message)));

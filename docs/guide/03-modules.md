@@ -81,6 +81,12 @@ something from payments, it calls the payments module's public API. The reason: 
 module B's tables directly, B can never change its tables without breaking A, and the two become one
 tangled thing.
 
+A module's tables are created by **migrations**: numbered SQL files in
+`internal/infrastructure/migrations/` (`0001_create_scholars.sql`, `0002_...`), applied once each by
+`npm run db:migrate`. Every table is created behind row-level security, with policies, in the same file;
+a check fails the build otherwise. The platform schema, owned by the kernel, works the same way in
+`kernel/db/migrations`. See [the local database runbook](../runbooks/local-database.md).
+
 ## Creating a module
 
 ```

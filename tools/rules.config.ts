@@ -86,6 +86,16 @@ export const rules = {
   /** Where configuration may be read from the environment. */
   processEnvAllowedPaths: [/^apps\/[^/]+\/src\/kernel\/config\//, /^apps\/[^/]+\/src\/main\.ts$/],
 
+  /** Infrastructure files under infra/ and the Dockerfiles of the applications. */
+  infra: {
+    /** Images that this repository builds itself. Everything else needs a version tag (1.2 or 1.2.3). */
+    localImagePrefixes: ["minesup/"],
+    /** Text that must never appear in staging files (comments excluded): staging holds synthetic data only. */
+    forbiddenReferences: [/\.gov\.cm\b/i, /\bprod(uction)?[.-]/i, /\breal[-_ ]?(scholar|data)/i, /\bminesup\.cm\b/i],
+    /** Linux capabilities that give a container far more power than it needs. */
+    dangerousCapabilities: ["ALL", "SYS_ADMIN", "NET_ADMIN", "NET_RAW", "SYS_PTRACE", "SYS_MODULE", "DAC_READ_SEARCH", "SYS_RAWIO"],
+  },
+
   /** Scopes accepted in pull request titles, besides the module codes. */
   extraCommitScopes: ["fn", "pl", "qs", "dt", "dp", "repo", "deps", "docs"],
 } as const;

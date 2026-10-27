@@ -11,7 +11,7 @@ const REQUIRED_SECTIONS = [
   "Not included and known gaps",
   "What comes next",
 ];
-const STATUSES = ["Delivered", "Complete"];
+const STATUSES = ["In progress", "Delivered", "Complete"];
 const TASK_ROW = /^\|\s*([A-Z]{2}-\d{2})\s*\|(.*)\|\s*$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const LINK = /\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
@@ -89,9 +89,9 @@ function checkTaskRecords(root: string, findings: Finding[]): void {
         findings.push(finding("doc-task-record", file, `Missing section "## ${section}".`));
       }
     }
-    const statusLine = /^Status:\s*(\w+)\s*\((\d{4}-\d{2}-\d{2})\)/m.exec(text);
+    const statusLine = /^Status:\s*([A-Za-z ]+?)\s*\((\d{4}-\d{2}-\d{2})\)/m.exec(text);
     if (statusLine === null) {
-      findings.push(finding("doc-task-record", file, 'Add a line "Status: Delivered (YYYY-MM-DD)" or "Status: Complete (YYYY-MM-DD)".'));
+      findings.push(finding("doc-task-record", file, 'Add a line "Status: In progress (YYYY-MM-DD)", "Status: Delivered (YYYY-MM-DD)" or "Status: Complete (YYYY-MM-DD)".'));
     } else if (row !== undefined && (statusLine[1] !== row.status || statusLine[2] !== row.date)) {
       findings.push(finding("doc-task-record", file, `The status here (${statusLine[1]}, ${statusLine[2]}) differs from the progress log (${row.status}, ${row.date}). Keep them the same.`));
     }

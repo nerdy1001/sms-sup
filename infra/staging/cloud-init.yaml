@@ -1,0 +1,276 @@
+#cloud-config
+# Sets up the staging server on its first start. Paste infra/staging/cloud-init.yaml (the rendered
+# file) into the "User data" box when you create the server. Do not edit that file: edit this
+# template or the scripts in infra/staging/bin and run `npm run render:cloud-init`. A check fails
+# when the rendered file is out of date.
+#
+# Replace the two placeholders in the rendered file before you use it:
+#   __ADMIN_PUBLIC_KEY__   your own public SSH key (the line from ~/.ssh/id_ed25519.pub)
+#   __DEPLOY_PUBLIC_KEY__  the public key of the deploy key pair (see docs/runbooks/staging.md)
+package_update: true
+package_upgrade: true
+packages:
+  - docker.io
+  - docker-compose-v2
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - curl
+  - gnupg
+  - ca-certificates
+
+users:
+  - name: admin
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: true
+    ssh_authorized_keys:
+      - __ADMIN_PUBLIC_KEY__
+  # The deploy key can run one script and nothing else (restrict, command).
+  - name: deploy
+    shell: /bin/bash
+    lock_passwd: true
+    ssh_authorized_keys:
+      - 'restrict,command="/opt/staging/bin/staging-deploy.sh" __DEPLOY_PUBLIC_KEY__'
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/00-hardening.conf
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+      X11Forwarding no
+      AllowUsers admin deploy
+      MaxAuthTries 3
+  - path: /etc/fail2ban/jail.d/sshd.local
+    permissions: "0644"
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 4
+      bantime = 1h
+  - path: /etc/cron.d/staging-backup
+    permissions: "0644"
+    content: |
+      15 2 * * * root /opt/staging/bin/backup.sh >> /var/log/staging-backup.log 2>&1
+      45 2 * * * root /opt/staging/bin/restore.sh verify >> /var/log/staging-backup.log 2>&1
+  - path: /opt/staging/bin/staging-deploy.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      # The only thing the deploy key can run (a forced command in authorized_keys). The key can deploy,
+      # roll back and show the status. It cannot open a shell. GitHub Actions calls it as:
+      #   tar -cf - release | ssh deploy@server "deploy <40 hex characters of the commit>"
+      set -euo pipefail
+      umask 027
+
+      ROOT="${STAGING_ROOT:-/opt/staging}"
+      KEEP=5
+      COMMAND="${SSH_ORIGINAL_COMMAND:-}"
+      UPLOAD=""
+      trap '[ -z "$UPLOAD" ] || rm -f "$UPLOAD"' EXIT
+
+      fail() {
+        echo "staging-deploy: $*" >&2
+        exit 1
+      }
+
+      [ -d "$ROOT" ] || fail "$ROOT does not exist"
+      exec 9>"$ROOT/.lock"
+      flock -n 9 || fail "another deployment is running"
+
+      compose() {
+        local dir="$1"
+        shift
+        docker compose --env-file "$ROOT/.env" -f "$dir/compose.yaml" "$@"
+      }
+
+      read_state() { [ -f "$ROOT/$1" ] && cat "$ROOT/$1" || true; }
+
+      # Starts a release and proves that the new version is the one that answers.
+      bring_up() {
+        local version="$1" dir="$ROOT/releases/$1"
+        [ -d "$dir" ] || fail "release $version is not on this server"
+        APP_VERSION="$version"
+        TAILSCALE_IP="$(tailscale ip -4 | head -n 1)"
+        [ -n "$TAILSCALE_IP" ] || fail "this server has no Tailscale address; run tailscale up first"
+        export APP_VERSION TAILSCALE_IP
+
+        local image
+        for image in $(compose "$dir" config --images | grep -v '^minesup/'); do
+          docker manifest inspect "$image" >/dev/null 2>&1 || fail "the image $image does not exist in its registry"
+        done
+        compose "$dir" up -d --remove-orphans --wait --wait-timeout 120 || return 1
+        local answer
+        answer="$(compose "$dir" exec -T core-api wget -qO- http://127.0.0.1:3000/health)" || return 1
+        [[ "$answer" == *"\"version\":\"$version\""* ]] || return 1
+      }
+
+      deploy() {
+        local version="$1"
+        [[ "$version" =~ ^[0-9a-f]{40}$ ]] || fail "the version must be a 40 character commit id"
+        local dir="$ROOT/releases/$version"
+        UPLOAD="$(mktemp "$ROOT/upload.XXXXXX")"
+        cat >"$UPLOAD"
+
+        # The upload must contain exactly three regular files, nothing else.
+        local expected listing
+        expected=$'Caddyfile\ncompose.yaml\nimage.tar.gz'
+        listing="$(tar -tf "$UPLOAD" | sed 's#^\./##' | sort)"
+        [ "$listing" = "$expected" ] || fail "the upload does not contain exactly: Caddyfile, compose.yaml, image.tar.gz"
+        if tar -tvf "$UPLOAD" | grep -qv '^-'; then fail "the upload contains something other than regular files"; fi
+
+        rm -rf "$dir"
+        mkdir -p "$dir"
+        tar -xf "$UPLOAD" -C "$dir" --no-same-owner --no-same-permissions
+        docker load -i "$dir/image.tar.gz" >/dev/null
+
+        local current previous
+        current="$(read_state current)"
+        if bring_up "$version"; then
+          if [ -n "$current" ] && [ "$current" != "$version" ]; then echo "$current" >"$ROOT/previous"; fi
+          echo "$version" >"$ROOT/current"
+          echo "deployed $version"
+          prune
+        else
+          echo "staging-deploy: version $version failed its health check" >&2
+          previous="$current"
+          if [ -n "$previous" ] && [ "$previous" != "$version" ] && bring_up "$previous"; then
+            echo "staging-deploy: rolled back to $previous" >&2
+          fi
+          exit 1
+        fi
+      }
+
+      rollback() {
+        local current previous
+        current="$(read_state current)"
+        previous="$(read_state previous)"
+        [ -n "$previous" ] || fail "there is no previous release to go back to"
+        bring_up "$previous"
+        echo "$previous" >"$ROOT/current"
+        echo "$current" >"$ROOT/previous"
+        echo "rolled back to $previous"
+      }
+
+      prune() {
+        local old
+        # shellcheck disable=SC2012
+        for old in $(ls -1t "$ROOT/releases" | tail -n +$((KEEP + 1))); do
+          docker image rm "minesup/core-api:$old" >/dev/null 2>&1 || true
+          rm -rf "${ROOT:?}/releases/$old"
+        done
+      }
+
+      case "$COMMAND" in
+        "deploy "*) deploy "${COMMAND#deploy }" ;;
+        rollback) rollback ;;
+        status)
+          echo "current:  $(read_state current)"
+          echo "previous: $(read_state previous)"
+          ;;
+        *) fail "unknown command; use: deploy <commit>, rollback, status" ;;
+      esac
+  - path: /opt/staging/bin/backup.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      # Nightly backup of the staging database, started by cron (see cloud-init). Keeps 7 days.
+      set -euo pipefail
+      umask 077
+
+      DIR="${STAGING_BACKUP_DIR:-/var/backups/staging}"
+      KEEP_DAYS=7
+      mkdir -p "$DIR"
+
+      container="$(docker ps -q --filter label=com.docker.compose.project=staging --filter label=com.docker.compose.service=postgres)"
+      [ -n "$container" ] || { echo "backup: the database container is not running" >&2; exit 1; }
+
+      stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+      docker exec "$container" pg_dump -U sms -d sms -Fc >"$DIR/sms-$stamp.dump.partial"
+      mv "$DIR/sms-$stamp.dump.partial" "$DIR/sms-$stamp.dump"
+      find "$DIR" -name 'sms-*.dump' -mtime +"$KEEP_DAYS" -delete
+      echo "backup: wrote $DIR/sms-$stamp.dump"
+  - path: /opt/staging/bin/restore.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      # Restores or verifies a backup of the staging database.
+      #   restore.sh verify            restores the newest backup into a scratch database, counts its tables, deletes it
+      #   restore.sh apply <file> yes  replaces the staging database with the backup (destroys current data)
+      set -euo pipefail
+
+      DIR="${STAGING_BACKUP_DIR:-/var/backups/staging}"
+
+      container="$(docker ps -q --filter label=com.docker.compose.project=staging --filter label=com.docker.compose.service=postgres)"
+      [ -n "$container" ] || { echo "restore: the database container is not running" >&2; exit 1; }
+
+      psql_run() { docker exec -i "$container" psql -U sms -d postgres -v ON_ERROR_STOP=1 "$@"; }
+
+      case "${1:-}" in
+        verify)
+          # shellcheck disable=SC2012
+          file="$(ls -1t "$DIR"/sms-*.dump 2>/dev/null | head -n 1 || true)"
+          [ -n "$file" ] || { echo "restore: there is no backup in $DIR" >&2; exit 1; }
+          psql_run -c "DROP DATABASE IF EXISTS restore_check" -c "CREATE DATABASE restore_check"
+          docker exec -i "$container" pg_restore -U sms -d restore_check --no-owner <"$file"
+          tables="$(docker exec -i "$container" psql -U sms -d restore_check -tAc "select count(*) from information_schema.tables where table_schema not in ('pg_catalog','information_schema')")"
+          psql_run -c "DROP DATABASE restore_check"
+          echo "restore: $file restored into a scratch database with $tables table(s); the scratch database was deleted"
+          ;;
+        apply)
+          file="${2:-}"
+          [ -f "$file" ] || { echo "restore: give the path of a backup file" >&2; exit 1; }
+          [ "${3:-}" = "yes" ] || { echo "restore: this replaces the staging database. Add the word yes to confirm." >&2; exit 1; }
+          docker exec -i "$container" pg_restore -U sms -d sms --clean --if-exists --no-owner <"$file"
+          echo "restore: staging database replaced from $file"
+          ;;
+        *)
+          echo "usage: restore.sh verify | restore.sh apply <file> yes" >&2
+          exit 1
+          ;;
+      esac
+  - path: /opt/staging/bin/init-staging.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      # Run once on the server, after tailscale up, as root:
+      #   sudo /opt/staging/bin/init-staging.sh <name of this machine on the tailnet, ending in .ts.net>
+      # It creates the database password on the server (it never exists anywhere else) and the settings file.
+      set -euo pipefail
+
+      ROOT="${STAGING_ROOT:-/opt/staging}"
+      hostname="${1:-}"
+      [[ "$hostname" =~ ^[a-z0-9-]+(\.[a-z0-9-]+)*\.ts\.net$ ]] || {
+        echo "init-staging: give the full Tailscale name, for example sms-staging.tail1234.ts.net" >&2
+        exit 1
+      }
+
+      install -d -m 0700 "$ROOT/secrets"
+      if [ ! -f "$ROOT/secrets/postgres_password" ]; then
+        head -c 32 /dev/urandom | base64 | tr -d '/+=\n' >"$ROOT/secrets/postgres_password"
+        # Readable by the database user inside its container; the folder above stays root only.
+        chmod 0444 "$ROOT/secrets/postgres_password"
+      fi
+      install -d -m 0755 "$ROOT/releases"
+      printf 'STAGING_HOSTNAME=%s\n' "$hostname" >"$ROOT/.env"
+      chmod 0644 "$ROOT/.env"
+      if id deploy >/dev/null 2>&1; then chown deploy:deploy "$ROOT" "$ROOT/releases"; fi
+      echo "init-staging: done. Staging will be reachable at https://$hostname after the first deployment."
+
+runcmd:
+  - usermod -aG docker deploy
+  - curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg -o /usr/share/keyrings/tailscale-archive-keyring.gpg
+  - curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list -o /etc/apt/sources.list.d/tailscale.list
+  - apt-get update
+  - apt-get install -y tailscale
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow OpenSSH
+  - ufw allow in on tailscale0
+  - ufw --force enable
+  - systemctl restart ssh
+  - systemctl enable --now fail2ban
+  - touch /opt/staging/.cloud-init-done

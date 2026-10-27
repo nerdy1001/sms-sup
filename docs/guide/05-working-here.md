@@ -16,6 +16,8 @@
 | `npm run check:rules` | Only the rules robot. |
 | `npm test` | Only the tests. |
 | `npm run new:module -- <CODE>` | Creates a module. |
+| `npm run db:up`, `db:migrate`, `db:seed`, `db:reset` | The local database: start it, apply migrations, add synthetic data, start again (see below). |
+| `npm run render:cloud-init` | Rebuilds the staging server file after you change a script in `infra/staging/bin`. The check fails until you do. |
 
 ## One task, start to finish
 
@@ -42,8 +44,8 @@ Each task changes two kinds of documentation.
    kernel building block, a new rule, a new command), the relevant page is updated and the glossary gets
    the new words.
 
-The progress log (`docs/progress.md`) gets a row. The status starts as **Delivered** when the work is
-handed over and becomes **Complete** when it is accepted. The documentation check fails if a row has no
+The progress log (`docs/progress.md`) gets a row. The status is **In progress** while a step that only you can do is pending, **Delivered** when the work is
+handed over and **Complete** when it is accepted. The documentation check fails if a row has no
 record, if a record has no row, or if a link in any Markdown file is dead.
 
 ## When the automatic checks fail on GitHub
@@ -74,6 +76,24 @@ It opens a pull request when a library has a new version. If it is a patch or mi
 check is green, the pipeline merges it by itself. A major update, an update of a 0.x library, or
 anything that touches code stays open for you. Read the release notes of a major update before
 merging.
+
+## The database
+
+Start it once a day with `npm run db:up`, and apply new migrations with `npm run db:migrate` after
+pulling changes. To change the database, add a new numbered migration; never edit one that has been
+applied (the runner refuses). `npm run db:reset` starts again from nothing on your computer. Every table
+needs row-level security and policies; `npm run check` tells you what is missing. The steps, and what to do
+when something fails, are in [the local database runbook](../runbooks/local-database.md). The database tests
+in `npm test` use a temporary server of their own, or are skipped with a message when none can be started.
+
+## Staging
+
+After a merge to `main`, once `checks`, `audit` and `secret-history` pass, the pipeline deploys to the
+staging server by itself (only when the repository variable `STAGING_HOST` exists). Check that it worked
+at `https://<name>/health`: the answer carries the commit that is running. If a deployment fails, the
+server goes back to the previous version by itself and the job turns red. To go back by hand, or to
+create the server, use [the staging runbook](../runbooks/staging.md). Never edit files on the server:
+change the repository and merge.
 
 ## Changing a rule
 

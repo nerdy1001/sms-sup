@@ -3,6 +3,8 @@ import { pathToFileURL } from "node:url";
 import { checkDependencies } from "./checks/dependencies.ts";
 import { checkDocs } from "./checks/docs.ts";
 import { checkImports } from "./checks/imports.ts";
+import { checkInfra } from "./checks/infra.ts";
+import { checkMigrations } from "./checks/migrations.ts";
 import { checkSecrets } from "./checks/secrets.ts";
 import { checkSecurity } from "./checks/security.ts";
 import { checkSql } from "./checks/sql.ts";
@@ -19,6 +21,8 @@ export const CHECKS: Readonly<Record<string, (root: string) => CheckResult>> = {
   security: checkSecurity,
   secrets: checkSecrets,
   dependencies: (root) => checkDependencies(root),
+  infra: checkInfra,
+  migrations: checkMigrations,
 };
 
 export interface Report {

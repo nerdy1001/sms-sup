@@ -1,0 +1,89 @@
+#cloud-config
+# Sets up the staging server on its first start. Paste infra/staging/cloud-init.yaml (the rendered
+# file) into the "User data" box when you create the server. Do not edit that file: edit this
+# template or the scripts in infra/staging/bin and run `npm run render:cloud-init`. A check fails
+# when the rendered file is out of date.
+#
+# Replace the two placeholders in the rendered file before you use it:
+#   __ADMIN_PUBLIC_KEY__   your own public SSH key (the line from ~/.ssh/id_ed25519.pub)
+#   __DEPLOY_PUBLIC_KEY__  the public key of the deploy key pair (see docs/runbooks/staging.md)
+package_update: true
+package_upgrade: true
+packages:
+  - docker.io
+  - docker-compose-v2
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - curl
+  - gnupg
+  - ca-certificates
+
+users:
+  - name: admin
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: true
+    ssh_authorized_keys:
+      - __ADMIN_PUBLIC_KEY__
+  # The deploy key can run one script and nothing else (restrict, command).
+  - name: deploy
+    shell: /bin/bash
+    lock_passwd: true
+    ssh_authorized_keys:
+      - 'restrict,command="/opt/staging/bin/staging-deploy.sh" __DEPLOY_PUBLIC_KEY__'
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/00-hardening.conf
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+      X11Forwarding no
+      AllowUsers admin deploy
+      MaxAuthTries 3
+  - path: /etc/fail2ban/jail.d/sshd.local
+    permissions: "0644"
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 4
+      bantime = 1h
+  - path: /etc/cron.d/staging-backup
+    permissions: "0644"
+    content: |
+      15 2 * * * root /opt/staging/bin/backup.sh >> /var/log/staging-backup.log 2>&1
+      45 2 * * * root /opt/staging/bin/restore.sh verify >> /var/log/staging-backup.log 2>&1
+  - path: /opt/staging/bin/staging-deploy.sh
+    permissions: "0755"
+    content: |
+      {{file:infra/staging/bin/staging-deploy.sh}}
+  - path: /opt/staging/bin/backup.sh
+    permissions: "0755"
+    content: |
+      {{file:infra/staging/bin/backup.sh}}
+  - path: /opt/staging/bin/restore.sh
+    permissions: "0755"
+    content: |
+      {{file:infra/staging/bin/restore.sh}}
+  - path: /opt/staging/bin/init-staging.sh
+    permissions: "0755"
+    content: |
+      {{file:infra/staging/bin/init-staging.sh}}
+
+runcmd:
+  - usermod -aG docker deploy
+  - curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg -o /usr/share/keyrings/tailscale-archive-keyring.gpg
+  - curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list -o /etc/apt/sources.list.d/tailscale.list
+  - apt-get update
+  - apt-get install -y tailscale
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow OpenSSH
+  - ufw allow in on tailscale0
+  - ufw --force enable
+  - systemctl restart ssh
+  - systemctl enable --now fail2ban
+  - touch /opt/staging/.cloud-init-done

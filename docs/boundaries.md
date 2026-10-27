@@ -127,6 +127,42 @@ These run on application and package code (not on tests or `tools`).
 The audit job adds a rule the files cannot show: a high or critical vulnerability in a production
 dependency blocks the merge unless it is accepted in `security/accepted-risks.json`.
 
+## Infrastructure
+
+Applies to the files in `infra/`, the `Dockerfile` and `ci.yml`. These rules cannot be suppressed by a comment.
+
+| Rule | What it forbids | Instead |
+|---|---|---|
+| `infra-image-tag` | An image with no tag, `latest`, or a tag that is not a version (except images built here, `minesup/`). | A version tag. |
+| `infra-port-binding` | A published port without an address (Docker then opens it to everyone, around the firewall). | `${TAILSCALE_IP}:443:443` or `127.0.0.1:...`. |
+| `infra-privileged` | `privileged`, host network or process namespace, the Docker socket mounted into a container. | Nothing: redesign. |
+| `infra-capability` | Adding a dangerous Linux capability. | Drop all, add only what is needed. |
+| `infra-literal-secret` | A password or key written into a Compose or server file. | A file generated on the server. |
+| `infra-forbidden-reference` | References that break the zone rule (the portal zone, production names) in staging files. | Keep staging to the core zone. |
+| `infra-script-strict` | A server script without `set -euo pipefail`. | Add it. |
+| `infra-pipe-to-shell` | Downloading and running in one step (`curl` piped into `sh`). | Download, check, then run, or use the package manager. |
+| `infra-cloud-init-stale` | `cloud-init.yaml` that differs from what the template and scripts produce. | `npm run render:cloud-init`. |
+| `infra-deploy-key-unrestricted` | A deploy key line without `restrict,command=`. | Restore the restriction. |
+
+## Database files (migrations and seeds)
+
+Applies to every `.sql` file in a `migrations` or `seeds` folder (the kernel's in `kernel/db`, each module's
+in `internal/infrastructure`). These rules cannot be suppressed by a comment.
+
+| Rule | What it forbids | Instead |
+|---|---|---|
+| `migration-name` | A file name that is not like `0001_short_description.sql`. | Four digits, then lowercase words joined by underscores. |
+| `migration-sequence` | Numbers that do not start at 0001, have a gap, or repeat (counted separately for the platform, each module, migrations and seeds). | Renumber the newer file. |
+| `migration-rls-missing` | A table created without `enable row level security` in the same file. | Enable it, and write the policies. |
+| `migration-rls-not-forced` | A table with row-level security that is not forced. | `force row level security`, so the owner obeys the policies too. |
+| `migration-unqualified-object` | A table, view, function or type created without a schema. | Write the schema in front of the name. |
+| `migration-foreign-schema` | A platform migration that touches another schema. | The kernel owns only `platform`. |
+| `migration-transaction-control` | `begin`, `commit`, `rollback` and similar. | Nothing: the runner wraps each file in a transaction. |
+| `migration-grant-public` | A grant to `public`. | Grant to a named role. |
+| `migration-security-definer` | A security definer function without `set search_path`. | Add `set search_path = pg_catalog`. |
+| `migration-destructive` | (Warning.) `drop table`, `drop schema`, `drop column`, `truncate`. | Check that a backup exists and nothing reads it. |
+| `seed-not-repeatable` | An `insert` in a seed without `on conflict`. | `on conflict (...) do nothing`. |
+
 ## Suppressing a rule
 
 A coding standard can be suppressed on one line, with a reason that is written down:

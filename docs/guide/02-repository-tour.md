@@ -9,6 +9,7 @@ minesup-sms/
     portal-api/        the student portal API
   packages/
     contracts/         data shapes shared by both zones
+  infra/               the staging server and the local helpers, as code
   tools/               the checks, the module generator, their tests
   docs/                this documentation and the reasons behind decisions
   .github/             automatic checks and settings for GitHub
@@ -26,7 +27,11 @@ Two programs. They will be built, tested and deployed separately.
 The internal system. Runs only on the Ministry network. Inside, under `src/`:
 
 - `kernel/` is the **toolbox** used by every module: reading configuration, logging, the web server,
-  database helpers, encryption, audit hooks. It is empty now; tasks FN-04 to FN-09 fill it. Rule:
+  database helpers, encryption, audit hooks. It holds only a placeholder health service now
+  (`kernel/http/health.ts`, started by `src/main.ts`, so staging has something to deploy),
+  the database folder `kernel/db` (migrations and seeds of the platform schema, and `context.ts`, which tells
+  the database who is asking) and `kernel/seed` (the generator of synthetic scholars); tasks FN-05 to FN-09
+  fill the rest. Rule:
   modules may use the kernel, the kernel never uses a module.
 - `modules/` holds the **business features**, one folder each (registry, payments, documents and so on).
   None exists yet. You create each with a command (see [03-modules.md](03-modules.md)).
@@ -36,8 +41,26 @@ The internal system. Runs only on the Ministry network. Inside, under `src/`:
 The only part reachable from the internet. Same shape as `core-api` (`kernel/` and `modules/`) and the
 same rules. It must never import anything from `core-api`.
 
+`core-api` also has a `Dockerfile` (how its image is built for staging) and a `.dockerignore`.
+
 Each app folder also has a `package.json`, which declares what that app depends on. This matters:
 a check refuses code that uses a library the app did not declare.
+
+## `infra/`
+
+Everything needed to run the application somewhere other than your editor. Nothing here is application
+code.
+
+| Path | What it is |
+|---|---|
+| `staging/compose.yaml` | The four containers of staging: front door (Caddy), application, database, mail catcher. |
+| `staging/Caddyfile` | The front door's settings: HTTPS and where each address goes. |
+| `staging/cloud-init.yaml` | The whole server setup, to paste into the droplet creation page. Generated: run `npm run render:cloud-init`, never edit by hand. |
+| `staging/cloud-init.template.yaml` | The source of the file above. |
+| `staging/bin/` | The scripts that live on the server: deploy and rollback, backup, restore, first-time setup. |
+| `local/compose.yaml` | The database (and a mail catcher) for your own computer. See [the local database runbook](../runbooks/local-database.md). |
+
+How to use them is in [the staging runbook](../runbooks/staging.md).
 
 ## `packages/contracts`
 
@@ -61,6 +84,10 @@ The robot and its helpers. You will rarely edit it, but you will run it all the 
 | `checks/docs.ts` | Checks that the documentation is complete and its links work (see [../README.md](../README.md)). |
 | `checks/security.ts` | Eight security rules for application code (weak hashes, switched-off certificate checks, queries built from values and so on). |
 | `checks/secrets.ts`, `lib/secrets.ts` | Finds keys, tokens and passwords in files, and files that must never be committed. |
+| `checks/infra.ts` | Ten rules for the files in `infra/` (unpinned images, open ports, powerful containers, passwords in files and so on). |
+| `checks/migrations.ts` | Ten rules for the SQL files: row-level security on every table, numbering, repeatable seeds and more. |
+| `db/` | The database runner: `cli.ts` (the `npm run db:*` commands), `migrate.ts`, `connection.ts` (talks to PostgreSQL through psql), `sql-files.ts`, and the helper that starts a temporary server for the tests. |
+| `render-cloud-init.ts` | Builds `infra/staging/cloud-init.yaml` from its template and the scripts. |
 | `checks/dependencies.ts` | Checks that dependencies are pinned, come from the npm registry, and match the lock file rules. |
 | `scan-history.ts` | The secret scan over every commit of the history (`npm run scan:secrets`). |
 | `audit.ts` | Asks npm about known vulnerabilities and applies the blocking policy (`npm run audit:deps`). |
@@ -83,12 +110,13 @@ The robot and its helpers. You will rarely edit it, but you will run it all the 
 | `architecture/modules.md` | The planned modules and which may depend on which. |
 | `adr/` | Decision records: why one repository, why no NestJS, why custom checks. |
 | `github-setup.md` | GitHub settings to apply once. |
+| `runbooks/` | Step-by-step instructions for running things: the staging server and the local database. |
 
 ## `.github/`
 
 | Path | What it is |
 |---|---|
-| `workflows/ci.yml` | The automatic checks on every pull request: install, types, rules, tests, title. |
+| `workflows/ci.yml` | The automatic checks on every pull request (install, types, rules, tests, audit, history scan, title), and the deployment to staging after a merge to `main`. |
 | `pull_request_template.md` | The checklist shown when you open a pull request. |
 | `dependabot.yml` | Weekly automatic pull requests proposing library updates. |
 

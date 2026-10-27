@@ -1,4 +1,4 @@
-# The pipeline of tasks FN-01 and FN-02. Every job must pass before code is merged.
+# The pipeline of tasks FN-01 to FN-03. Every job must pass before code is merged.
 # Job names are referenced in docs/github-setup.md; keep them in step.
 name: ci
 
@@ -34,7 +34,11 @@ jobs:
         run: npm run typecheck
       - name: Architecture, coding, security, secret and dependency rules
         run: npm run check:rules
+      - name: PostgreSQL programs (the database tests start their own temporary server)
+        run: sudo apt-get install -y --no-install-recommends postgresql
       - name: Tests
+        env:
+          SMS_REQUIRE_DB: "yes"
         run: npm test
 
   # Known vulnerabilities in the dependencies. The list of advisories changes without any change
@@ -121,10 +125,44 @@ jobs:
             echo "Left open for a human review."
           fi
 
+  # Deploys to the staging server after a merge to main, once every job above has passed. It runs
+  # only when the repository variable STAGING_HOST exists, so the pipeline works before the server
+  # does. The key it uses can only run the deploy script on the server (see infra/staging).
+  deploy-staging:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.STAGING_HOST != ''
+    needs: [checks, audit, secret-history]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the image
+        run: docker build -f apps/core-api/Dockerfile --build-arg GIT_SHA="$GITHUB_SHA" -t "minesup/core-api:$GITHUB_SHA" .
+      - name: Prepare the release
+        run: |
+          mkdir release
+          docker save "minesup/core-api:$GITHUB_SHA" | gzip > release/image.tar.gz
+          cp infra/staging/compose.yaml infra/staging/Caddyfile release/
+      - name: Deploy
+        env:
+          STAGING_HOST: ${{ vars.STAGING_HOST }}
+          STAGING_HOST_KEY: ${{ vars.STAGING_HOST_KEY }}
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$STAGING_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$STAGING_HOST_KEY" > ~/.ssh/known_hosts
+          tar -C release -cf - Caddyfile compose.yaml image.tar.gz | ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes "deploy@$STAGING_HOST" "deploy $GITHUB_SHA"
+
   # A failure on main goes to Slack. Without the SLACK_WEBHOOK_URL secret the step is skipped.
   notify:
     if: failure() && github.event_name == 'push'
-    needs: [checks, audit, secret-history]
+    needs: [checks, audit, secret-history, deploy-staging]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

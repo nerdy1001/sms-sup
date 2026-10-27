@@ -49,6 +49,27 @@ Settings that cannot live in the repository. Apply them when the repository is c
 Without the secret, the notify step prints a note and passes. The script sends only to addresses that
 start with `https://hooks.slack.com/services/` or `/workflows/`.
 
+## Database tests (task FN-04)
+
+The `checks` job installs PostgreSQL's programs (`apt-get install postgresql`) and sets `SMS_REQUIRE_DB=yes`,
+so the tests that start a temporary database cannot be skipped there. Nothing to configure in GitHub. If the
+install step ever fails, the job fails: do not remove the variable to make it pass, because the tests that
+protect the row-level security would then be skipped silently.
+
+## Staging deployment (task FN-03)
+
+The job `deploy-staging` needs one secret and two variables, added after the server exists. The steps,
+and how to get the values, are in [the staging runbook](runbooks/staging.md), part D.
+
+| Kind | Name | What it is |
+|---|---|---|
+| Secret | `STAGING_SSH_KEY` | The private deploy key. It can only run the deploy script on the server. |
+| Variable | `STAGING_HOST` | The server's public address. The job runs only when this exists. |
+| Variable | `STAGING_HOST_KEY` | The server's SSH host key, checked by fingerprint before you save it. |
+
+Do not add an approval step for the deployment unless your plan supports it for private repositories
+(GitHub Environments may be a paid feature there); the page tells you.
+
 ## Pull request flow
 
 Pull requests from Dependabot, titled `chore(deps): ...` or `ci(deps): ...`, merge by themselves when

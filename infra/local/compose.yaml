@@ -1,0 +1,35 @@
+# Optional services for development on your own computer. The application itself runs directly with
+# Node (npm run dev, from task FN-05); only the database and the mail catcher need containers.
+# The database commands are npm scripts: npm run db:up, db:migrate, db:seed, db:reset (docs/runbooks/local-database.md).
+# Everything is bound to 127.0.0.1, so nothing is reachable from other computers.
+#
+#   docker compose -f infra/local/compose.yaml up -d
+#   docker compose -f infra/local/compose.yaml down        (add -v to delete the data)
+name: sms-local
+
+services:
+  postgres:
+    image: postgres:17.5-alpine
+    environment:
+      POSTGRES_USER: sms
+      POSTGRES_DB: sms
+      # No password: the port is bound to this computer only.
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sms -d sms"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  mailpit:
+    image: axllent/mailpit:v1.27.7
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+
+volumes:
+  postgres-data: {}

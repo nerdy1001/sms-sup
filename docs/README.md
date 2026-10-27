@@ -16,14 +16,16 @@ together in the same pull request.
 
 - [progress.md](progress.md): the list of tasks, with their status.
 - [tasks/](tasks/): one record per task. Each says what was asked, what was built, how it works, why,
-  how to check it, what was left out and what comes next. Start with [tasks/FN-01.md](tasks/FN-01.md); the latest is [tasks/FN-02.md](tasks/FN-02.md).
+  how to check it, what was left out and what comes next. Start with [tasks/FN-01.md](tasks/FN-01.md); the latest is [tasks/FN-04.md](tasks/FN-04.md).
 
 ## Reference
 
 - [boundaries.md](boundaries.md): every enforced rule and the reason for it.
 - [architecture/modules.md](architecture/modules.md): the planned modules and their allowed dependencies.
-- [adr/](adr/): decision records (why one repository, why no framework, why custom checks).
+- [adr/](adr/): decision records (why one repository, why no framework, why custom checks, why staging is built the way it is, why the database is built the way it is).
 - [github-setup.md](github-setup.md): GitHub settings to apply once.
+- [runbooks/staging.md](runbooks/staging.md): create, connect, check and operate the staging server.
+- [runbooks/local-database.md](runbooks/local-database.md): start, migrate, seed and reset the database on your computer.
 
 ## How this documentation is kept up to date
 
@@ -32,7 +34,8 @@ The documentation is part of "done". When a task is marked complete, these thing
 1. **The task record** in `tasks/<ID>.md` is written or corrected (copy `tasks/_template.md`). It describes
    what the task delivered as it actually turned out, including what was left out and what is still open.
 2. **The progress log** (`progress.md`) gets the row, or the row changes status. A task is
-   **Delivered** when the work is handed over and **Complete** when you accept it.
+   **In progress** when a step that only you can do is pending, **Delivered** when the work is handed over and
+   **Complete** when you accept it.
 3. **The guide** pages that the task changed are updated: a new building block goes in the repository
    tour, a new rule in the checks page, a new routine in the working page. New words go in the glossary.
 4. **The reference** pages (`boundaries.md`, `architecture/modules.md`, an ADR) are updated if a rule,

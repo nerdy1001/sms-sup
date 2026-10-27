@@ -1,0 +1,21 @@
+# Reverse proxy of staging. It listens only on the Tailscale address (see compose.yaml) and gets its
+# HTTPS certificate from the local Tailscale for the *.ts.net name in STAGING_HOSTNAME.
+{
+    auto_https disable_redirects
+}
+
+{$STAGING_HOSTNAME} {
+    encode zstd gzip
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer"
+        -Server
+    }
+    reverse_proxy core-api:3000
+}
+
+# The mail catcher: the web page that shows the emails that staging would have sent.
+{$STAGING_HOSTNAME}:8025 {
+    reverse_proxy mailpit:8025
+}
