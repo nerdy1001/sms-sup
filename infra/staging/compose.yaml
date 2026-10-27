@@ -5,7 +5,7 @@ name: staging
 
 services:
   caddy:
-    image: caddy:2.10.0-alpine
+    image: caddy:2.11.6-alpine
     restart: unless-stopped
     ports:
       # Bound to the Tailscale address on purpose. Docker publishes ports around the firewall,
