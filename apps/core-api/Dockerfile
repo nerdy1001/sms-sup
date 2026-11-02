@@ -2,7 +2,7 @@
 #   docker build -f apps/core-api/Dockerfile --build-arg GIT_SHA=<commit> -t minesup/core-api:<commit> .
 # Node 22.18 and later runs TypeScript directly, so there is no build step and, for now, no
 # dependency to install.
-FROM node:22.23.4-alpine
+FROM node:25.9.0-alpine
 
 ARG GIT_SHA=unknown
 ENV NODE_ENV=production \
