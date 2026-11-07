@@ -44,6 +44,8 @@ export const rules = {
   contracts: {
     packageName: "@minesup/contracts",
     allowedExternal: ["zod"],
+    /** Node modules that test files of the package may use, so that its shapes can be tested. */
+    allowedInTests: ["test", "assert", "assert/strict"],
   },
 
   /** Node modules that application code must never load. */
@@ -77,7 +79,19 @@ export const rules = {
 
   /** Database drivers appear only where data access lives. */
   database: {
-    drivers: ["pg", "pg-pool", "postgres", "slonik", "kysely", "knex", "drizzle-orm", "sequelize", "typeorm", "@prisma/client", "mikro-orm"],
+    drivers: [
+      "pg",
+      "pg-pool",
+      "postgres",
+      "slonik",
+      "kysely",
+      "knex",
+      "drizzle-orm",
+      "sequelize",
+      "typeorm",
+      "@prisma/client",
+      "mikro-orm",
+    ],
     allowedPaths: [/^apps\/[^/]+\/src\/modules\/[^/]+\/internal\/infrastructure\//, /^apps\/[^/]+\/src\/kernel\/db\//],
     /** Schemas that every module may use besides its own (owned by the kernel). */
     sharedSchemas: ["platform"],

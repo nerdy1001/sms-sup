@@ -1,27 +1,23 @@
-import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import pg from "pg";
 
 /**
- * Talks to PostgreSQL through the command line client, psql. This avoids a database driver in the
- * tools (the repository depends on almost nothing) and runs the same way on every machine that has
- * either psql or Docker.
+ * Talks to PostgreSQL through the same driver the application uses (pg). It used to send scripts to the
+ * command line client, psql, which needed psql or Docker on every machine that ran a migration. The
+ * driver needs neither, which is what lets the same runner migrate the staging database from inside the
+ * application image.
  *
- *   docker  runs psql inside the container of infra/local/compose.yaml (the default)
- *   host    runs psql from this computer; the usual PGHOST, PGPORT, PGUSER and PGPASSWORD settings apply
+ * Where the database is: the usual PGHOST, PGPORT, PGUSER, PGDATABASE and PGPASSWORD settings. Without
+ * them the runner connects to 127.0.0.1:5432 as "sms", which is the local container of
+ * infra/local/compose.yaml (npm run db:up). A host that starts with "/" is a folder holding a Unix socket.
  */
 
-export type Mode = "docker" | "host";
-
 export interface ConnectionConfig {
-  readonly mode: Mode;
+  readonly host: string;
+  readonly port: number;
   readonly user: string;
   readonly database: string;
-  /** Used in docker mode: the Compose file and the name of the service. */
-  readonly composeFile?: string;
-  readonly service?: string;
-  /** Extra environment for the psql process (host mode). */
-  readonly env?: Readonly<Record<string, string | undefined>>;
-  /** Working directory for the docker command, so relative Compose paths resolve. */
-  readonly cwd?: string;
+  readonly password?: string | undefined;
 }
 
 export interface RunOptions {
@@ -31,8 +27,14 @@ export interface RunOptions {
 
 export interface Connection {
   readonly config: ConnectionConfig;
-  /** Runs a script, stopping at the first error, and returns the plain output (no headers, no alignment). */
-  run(sql: string, options?: RunOptions): string;
+  /**
+   * Runs a script (several statements are fine, and share one session), stopping at the first error.
+   * Returns the rows of every statement that produced rows as plain text: one line per row, columns
+   * joined by "|", nothing for null, "t" and "f" for booleans (the format psql -At prints).
+   */
+  run(sql: string, options?: RunOptions): Promise<string>;
+  /** One statement with parameters ($1, $2). Use it for any value that is not a constant of ours. */
+  query(sql: string, parameters: readonly string[], options?: RunOptions): Promise<string[][]>;
 }
 
 export class SqlError extends Error {
@@ -44,56 +46,103 @@ export class SqlError extends Error {
   }
 }
 
-export function createConnection(config: ConnectionConfig): Connection {
-  const psqlArguments = (database: string): string[] => ["-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-d", database, "-f", "-"];
+/** Reads the settings from the environment. PGPASSWORD_FILE names a file that holds the password (Docker secrets). */
+export function configFromEnvironment(
+  env: Readonly<Record<string, string | undefined>>,
+  readFile: (path: string) => string = (path) => readFileSync(path, "utf8"),
+): ConnectionConfig {
+  const port = Number(env["PGPORT"] ?? "5432");
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`PGPORT is "${env["PGPORT"]}", which is not a port number.`);
+  const file = env["PGPASSWORD_FILE"];
+  if (file !== undefined && env["PGPASSWORD"] !== undefined) throw new Error("Set PGPASSWORD or PGPASSWORD_FILE, not both.");
+  let password = env["PGPASSWORD"];
+  if (file !== undefined) {
+    try {
+      password = readFile(file).trim();
+    } catch (error) {
+      throw new Error(
+        `PGPASSWORD_FILE is set to ${file} but that file cannot be read (${error instanceof Error ? error.message : String(error)}).`,
+        { cause: error },
+      );
+    }
+  }
+  return { host: env["PGHOST"] ?? "127.0.0.1", port, user: env["PGUSER"] ?? "sms", database: env["PGDATABASE"] ?? "sms", password };
+}
 
-  const run = (sql: string, options: RunOptions = {}): string => {
-    const database = options.database ?? config.database;
-    let command: string;
-    let args: string[];
-    if (config.mode === "docker") {
-      command = "docker";
-      args = ["compose", "-f", config.composeFile ?? "infra/local/compose.yaml", "exec", "-T", config.service ?? "postgres", "psql", "-U", config.user, ...psqlArguments(database)];
-    } else {
-      command = "psql";
-      args = [...psqlArguments(database)];
-    }
-    const result = spawnSync(command, args, {
-      input: sql,
-      encoding: "utf8",
-      cwd: config.cwd,
-      env: { ...process.env, ...(config.env ?? {}), ...(config.mode === "host" ? { PGUSER: config.user } : {}) },
-      maxBuffer: 64 * 1024 * 1024,
+const AS_TEXT = { getTypeParser: () => (value: string) => value };
+
+function format(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value);
+  return JSON.stringify(value);
+}
+
+export function createConnection(config: ConnectionConfig): Connection {
+  const open = async <T>(options: RunOptions, work: (client: pg.Client) => Promise<T>): Promise<T> => {
+    const client = new pg.Client({
+      host: config.host,
+      port: config.port,
+      user: config.user,
+      database: options.database ?? config.database,
+      ...(config.password === undefined ? {} : { password: config.password }),
+      connectionTimeoutMillis: 5000,
     });
-    if (result.error !== undefined) {
-      const hint = config.mode === "docker" ? "Is Docker installed and running?" : "Is psql installed and on the PATH?";
-      throw new SqlError(`Could not start ${command}: ${result.error.message}. ${hint}`, "");
+    // A connection that dies while idle would otherwise end the process with an uncaught error.
+    client.on("error", () => {});
+    try {
+      await client.connect();
+    } catch (error) {
+      throw new SqlError(explain(config, error), "");
     }
-    if (result.status !== 0) {
-      throw new SqlError(explain(config.mode, result.status, result.stderr), result.stderr);
+    try {
+      return await work(client);
+    } catch (error) {
+      if (error instanceof SqlError) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      const code = (error as { code?: string }).code;
+      throw new SqlError(`PostgreSQL refused the script${code === undefined ? "" : ` (code ${code})`}: ${message}`, `ERROR:  ${message}`);
+    } finally {
+      await client.end().catch(() => {});
     }
-    return result.stdout;
   };
 
-  return { config, run };
+  const run = (sql: string, options: RunOptions = {}): Promise<string> =>
+    open(options, async (client) => {
+      // No parameters, so the simple protocol is used and a script of many statements is allowed.
+      const answer = (await client.query({ text: sql, rowMode: "array", types: AS_TEXT })) as unknown as
+        pg.QueryArrayResult | pg.QueryArrayResult[];
+      const results = Array.isArray(answer) ? answer : [answer];
+      const lines: string[] = [];
+      for (const result of results) for (const row of result.rows) lines.push(row.map(format).join("|"));
+      return lines.length === 0 ? "" : `${lines.join("\n")}\n`;
+    });
+
+  const query = (sql: string, parameters: readonly string[], options: RunOptions = {}): Promise<string[][]> =>
+    open(options, async (client) => {
+      const result = await client.query({ text: sql, values: [...parameters], rowMode: "array", types: AS_TEXT });
+      return result.rows.map((row: unknown[]) => row.map(format));
+    });
+
+  return { config, run, query };
 }
 
-/** A message the person can act on. Docker problems get their own explanation, not a database one. */
-export function explain(mode: Mode, status: number | null, stderr: string): string {
-  if (mode === "docker" && /docker API|Docker daemon|docker\.sock|pipe\/docker/i.test(stderr)) {
-    return "Docker is not running. Start Docker Desktop (or the Docker service), then try again.";
+/** A message the person can act on. */
+export function explain(config: ConnectionConfig, error: unknown): string {
+  const where = config.host.startsWith("/") ? `the socket in ${config.host}` : `${config.host}:${config.port}`;
+  const code = (error as { code?: string }).code;
+  const message = error instanceof Error ? error.message : String(error);
+  if (code === "ECONNREFUSED" || code === "ENOENT" || /ECONNREFUSED/.test(message)) {
+    return `Cannot reach PostgreSQL at ${where}. For the local database, start it with: npm run db:up (it needs Docker running).`;
   }
-  if (mode === "docker" && /service "?postgres"? is not running|no container found/i.test(stderr)) {
-    return "The local database is not running. Start it with: npm run db:up";
-  }
-  return `PostgreSQL refused the script (exit code ${status}): ${firstLine(stderr)}`;
+  if (code === "ENOTFOUND" || code === "EAI_AGAIN") return `The database host "${config.host}" cannot be found.`;
+  if (/timeout/i.test(message)) return `PostgreSQL at ${where} did not answer in 5 seconds.`;
+  if (code === "28P01" || code === "28000") return `PostgreSQL at ${where} refused the login for user "${config.user}" (${message}).`;
+  if (code === "3D000") return `The database "${config.database}" does not exist on ${where}. Create it, or run: npm run db:reset`;
+  return `Could not connect to PostgreSQL at ${where}: ${message}`;
 }
 
-function firstLine(text: string): string {
-  return text.split("\n").find((line) => line.trim() !== "")?.trim() ?? "no message";
-}
-
-/** A SQL string literal. Only for values the tools control (file names, checksums), never user input. */
+/** A SQL string literal. Only for constants of ours (file names, checksums), never for input or secrets: use query() with parameters. */
 export function literal(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }

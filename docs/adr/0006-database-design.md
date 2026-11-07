@@ -16,8 +16,10 @@ pays for his own tools and works in an environment where the package registry ma
    behind. The runner stores a fingerprint (SHA-256) of every applied file and refuses to run if one has
    been edited. Files live next to the code that owns them: the kernel's in `kernel/db/migrations`, each
    module's in its own `infrastructure/migrations`, each for its own schema.
-2. **No ORM and no migration tool for now.** The runner talks to PostgreSQL through the `psql` command
-   (in the local container, or from the host), so the repository gains no database dependency. An ORM
+2. **No ORM and no migration tool for now.** The runner is our own code on top of the `pg` driver, which the
+   application already uses. (It first sent scripts to the `psql` command, which needed `psql` or Docker on
+   every machine that migrated; it was moved to `pg` on 2026-11-04 so that the staging deployment can run it
+   from the application image.) An ORM
    such as Prisma was considered and not chosen: it does not model row-level security, wants one schema
    file for the whole database while each module here owns its schema, and needs generated code and
    install steps that `.npmrc` switches off. The choice of a typed query layer stays open and does not
@@ -54,15 +56,16 @@ pays for his own tools and works in an environment where the package registry ma
 - Policies depend on the application setting the identity correctly. A bug that sets the wrong identity
   is not caught by the database. `runAs` keeps that code in one place.
 - The staff roles in `platform.users` are provisional. Task AC-01 owns the real list.
-- `psql` has to exist where migrations run. That is true of the local container and of the Ubuntu
-  runner; it is a requirement for any server that runs migrations.
+- Migrations need a reachable PostgreSQL and its login settings (PGHOST and the others), nothing else. No
+  `psql` and no Docker are needed on the machine that runs them.
 - A migration that fails halfway is safe, but a migration that succeeds and is wrong can only be fixed by
   a new migration. That is the cost of never editing history.
 
 ## When to revisit
 
-- When the application gets its database driver (task FN-05): decide whether `kernel/db` also runs the
-  migrations at start-up or whether they stay a separate step.
+- The application has its database driver since FN-05 (`pg`, in `kernel/db`). Decided then: migrations stay a
+  separate step, not run at start-up. Done on 2026-11-04: the runner uses `pg`, and the staging deployment
+  runs it as a one-off step (ADR 0005, decision 10).
 - When the first module with real data arrives (RG-01): check that the pattern of policies scales, and
   whether a shared helper for "own rows" policies is worth having.
 - When the staging and production databases need a role split (owner, migrator, application): plan it

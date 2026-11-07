@@ -17,6 +17,7 @@ coverage/
 !.vscode/extensions.json
 
 # Data files that may hold personal data of scholars. Only synthetic data is committed (task FN-08).
+synthetic-data.json
 *.xlsx
 *.xls
 *.ods

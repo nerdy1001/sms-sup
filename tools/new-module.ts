@@ -15,7 +15,9 @@ function resolvePlanned(code: string, app: string | undefined): PlannedModule {
   const [first] = matches;
   if (first === undefined) {
     const known = plannedModules.map((entry) => `${entry.code} (${entry.name}, ${entry.app})`).join(", ");
-    throw new Error(`No planned module with code "${code}"${app === undefined ? "" : ` in ${app}`}. Planned modules: ${known}. To add one, edit tools/rules.config.ts and docs/architecture/modules.md first.`);
+    throw new Error(
+      `No planned module with code "${code}"${app === undefined ? "" : ` in ${app}`}. Planned modules: ${known}. To add one, edit tools/rules.config.ts and docs/architecture/modules.md first.`,
+    );
   }
   if (matches.length > 1) {
     throw new Error(`Code ${code} exists in several applications (${matches.map((entry) => entry.app).join(", ")}). Add --app <name>.`);

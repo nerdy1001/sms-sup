@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+/*
+ * Colours are named by what they do, in one place, so that a change of look is a change of a few lines.
+ * Every pair used for text meets the contrast ratio of 4.5:1 (WCAG AA) on its background.
+ */
+@theme {
+  --color-surface: #ffffff;
+  --color-page: #f4f6fa;
+  --color-ink: #0f172a;
+  --color-muted: #475569;
+  --color-line: #cbd5e1;
+  --color-brand: #1e40af;
+  --color-brand-ink: #ffffff;
+  --color-danger: #b91c1c;
+  --color-danger-wash: #fef2f2;
+  --color-ok: #166534;
+  --color-ok-wash: #f0fdf4;
+  --color-notice: #854d0e;
+  --color-notice-wash: #fefce8;
+  --font-sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
+
+html {
+  background: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}

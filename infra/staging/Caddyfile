@@ -12,7 +12,16 @@
         Referrer-Policy "no-referrer"
         -Server
     }
-    reverse_proxy core-api:3000
+    # One address for the page and the API, so the browser never makes a cross-origin request.
+    # The policy allows only files from this address; no inline script, no framing, no outside origin.
+    header Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+    @api path /api/* /health /ready
+    handle @api {
+        reverse_proxy core-api:3000
+    }
+    handle {
+        reverse_proxy staff-web:8080
+    }
 }
 
 # The mail catcher: the web page that shows the emails that staging would have sent.

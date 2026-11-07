@@ -24,7 +24,10 @@ test("a scaffolded module has the standard layout and passes every check", () =>
   for (const layer of ["domain", "application", "infrastructure", "http"]) {
     assert.ok(existsSync(join(root, `apps/core-api/src/modules/registry/internal/${layer}/.gitkeep`)));
   }
-  const manifest = JSON.parse(readFileSync(join(root, "apps/core-api/src/modules/registry/module.json"), "utf8")) as { code: string; database: { schema: string } };
+  const manifest = JSON.parse(readFileSync(join(root, "apps/core-api/src/modules/registry/module.json"), "utf8")) as {
+    code: string;
+    database: { schema: string };
+  };
   assert.equal(manifest.code, "RG");
   assert.equal(manifest.database.schema, "registry");
   const report = runChecks(root);
@@ -38,9 +41,15 @@ test("a module with a declared dependency passes, and a shortcut around its publ
   write("apps/core-api/src/modules/configuration/internal/domain/country.ts", "export const country = 'CM';\n");
 
   const clean = runChecks(root, ["imports", "structure"]);
-  assert.deepEqual(clean.findings.map((item) => item.rule), ["unused-declared-dependency"]);
+  assert.deepEqual(
+    clean.findings.map((item) => item.rule),
+    ["unused-declared-dependency"],
+  );
 
-  write("apps/core-api/src/modules/registry/internal/application/shortcut.ts", 'import { country } from "../../../configuration/internal/domain/country.ts";\nexport const c = country;\n');
+  write(
+    "apps/core-api/src/modules/registry/internal/application/shortcut.ts",
+    'import { country } from "../../../configuration/internal/domain/country.ts";\nexport const c = country;\n',
+  );
   const broken = runChecks(root, ["imports", "structure"]);
   assert.ok(broken.findings.some((item) => item.rule === "module-public-api" && item.severity === "error"));
 });

@@ -12,14 +12,20 @@
     "packages/*"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/staff-web/tsconfig.json",
+    "dev": "node tools/dev.ts",
     "check:rules": "node tools/check.ts",
-    "test": "node --test \"tools/**/*.test.ts\" \"apps/**/*.test.ts\" \"packages/**/*.test.ts\"",
-    "check": "npm run typecheck && npm run check:rules && npm test",
+    "lint": "eslint .",
+    "format": "prettier --write \"{apps,packages,tools}/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"{apps,packages,tools}/**/*.{ts,tsx}\"",
+    "test": "node --test \"tools/**/*.test.ts\" \"apps/**/*.test.ts\" \"packages/**/*.test.ts\" && npm run test --workspace @minesup/staff-web",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run check:rules && npm test",
     "new:module": "node tools/new-module.ts",
     "audit:deps": "node tools/audit.ts",
     "scan:secrets": "node tools/scan-history.ts",
     "render:cloud-init": "node tools/render-cloud-init.ts",
+    "api:docs": "node tools/api-docs.ts",
+    "seed:data": "node tools/seed-data.ts",
     "db:up": "docker compose -f infra/local/compose.yaml up -d --wait postgres",
     "db:down": "docker compose -f infra/local/compose.yaml down",
     "db:status": "node tools/db/cli.ts status",
@@ -29,7 +35,14 @@
     "db:psql": "docker compose -f infra/local/compose.yaml exec postgres psql -U sms sms"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@types/node": "26.6.5",
-    "typescript": "6.0.3"
+    "eslint": "10.14.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "pino-pretty": "13.2.0",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1"
   }
 }

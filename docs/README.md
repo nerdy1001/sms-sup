@@ -10,19 +10,25 @@ together in the same pull request.
 3. [guide/03-modules.md](guide/03-modules.md): how a module is built, and the four layers.
 4. [guide/04-checks.md](guide/04-checks.md): what the automatic checks do and how to read their messages.
 5. [guide/05-working-here.md](guide/05-working-here.md): the daily routine, from one task to the next.
-6. [guide/glossary.md](guide/glossary.md): the words.
+6. [guide/06-writing-a-route.md](guide/06-writing-a-route.md): how a module adds a route to the API.
+7. [guide/07-fastify.md](guide/07-fastify.md): Fastify explained through this repository (read it before changing the web layer).
+8. [guide/08-staging-explained.md](guide/08-staging-explained.md): Tailscale and the staging server explained from zero.
+9. [guide/09-front-end.md](guide/09-front-end.md): the staff front end explained from zero.
+10. [guide/glossary.md](guide/glossary.md): the words.
 
 ## What has been done
 
 - [progress.md](progress.md): the list of tasks, with their status.
 - [tasks/](tasks/): one record per task. Each says what was asked, what was built, how it works, why,
-  how to check it, what was left out and what comes next. Start with [tasks/FN-01.md](tasks/FN-01.md); the latest is [tasks/FN-04.md](tasks/FN-04.md).
+  how to check it, what was left out and what comes next. Start with [tasks/FN-01.md](tasks/FN-01.md); the latest is [tasks/FN-05.md](tasks/FN-05.md).
 
 ## Reference
 
 - [boundaries.md](boundaries.md): every enforced rule and the reason for it.
 - [architecture/modules.md](architecture/modules.md): the planned modules and their allowed dependencies.
-- [adr/](adr/): decision records (why one repository, why no framework, why custom checks, why staging is built the way it is, why the database is built the way it is).
+- [adr/](adr/): decision records (why one repository, why no framework, why custom checks, why staging is built the way it is, why the database is built the way it is, why Fastify and zod and a register of libraries).
+- [dependencies.md](dependencies.md): the register of libraries, with the reason for each.
+- [api/openapi.json](api/openapi.json): the generated description of the staff API (`npm run api:docs`).
 - [github-setup.md](github-setup.md): GitHub settings to apply once.
 - [runbooks/staging.md](runbooks/staging.md): create, connect, check and operate the staging server.
 - [runbooks/local-database.md](runbooks/local-database.md): start, migrate, seed and reset the database on your computer.

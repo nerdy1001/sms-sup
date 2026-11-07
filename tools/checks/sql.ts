@@ -53,7 +53,12 @@ export function checkSql(root: string): CheckResult {
 
   for (const info of discoverModules(root)) {
     const ownSchema = info.manifest?.database.schema ?? snakeCase(info.name);
-    const allowed = new Set<string>([ownSchema, ...(info.manifest?.database.extraSchemas ?? []), ...rules.database.sharedSchemas, ...SYSTEM_SCHEMAS]);
+    const allowed = new Set<string>([
+      ownSchema,
+      ...(info.manifest?.database.extraSchemas ?? []),
+      ...rules.database.sharedSchemas,
+      ...SYSTEM_SCHEMAS,
+    ]);
 
     for (const file of listFiles(root, info.dir)) {
       const isSql = file.endsWith(".sql");
@@ -70,7 +75,14 @@ export function checkSql(root: string): CheckResult {
         for (const match of fragment.text.matchAll(REFERENCE)) {
           const schema = (match[1] ?? "").toLowerCase();
           if (!allowed.has(schema)) {
-            findings.push(finding("sql-foreign-schema", file, `Module "${info.name}" reads or writes ${schema}.${match[2] ?? ""}. A module only touches its own schema "${ownSchema}"; ask the owning module through its public API instead.`, lineAt(match.index)));
+            findings.push(
+              finding(
+                "sql-foreign-schema",
+                file,
+                `Module "${info.name}" reads or writes ${schema}.${match[2] ?? ""}. A module only touches its own schema "${ownSchema}"; ask the owning module through its public API instead.`,
+                lineAt(match.index),
+              ),
+            );
           }
         }
 
@@ -80,13 +92,27 @@ export function checkSql(root: string): CheckResult {
           const temporary = match[1] !== undefined;
           const qualified = match[3] !== undefined;
           if (!temporary && !qualified) {
-            findings.push(finding("sql-unqualified-object", file, `"${match[2] ?? ""}" is created without a schema. Write ${ownSchema}.${match[2] ?? ""}, so that the object cannot land in the wrong schema.`, lineAt(match.index)));
+            findings.push(
+              finding(
+                "sql-unqualified-object",
+                file,
+                `"${match[2] ?? ""}" is created without a schema. Write ${ownSchema}.${match[2] ?? ""}, so that the object cannot land in the wrong schema.`,
+                lineAt(match.index),
+              ),
+            );
           }
         }
         for (const match of fragment.text.matchAll(CREATE_SCHEMA)) {
           const schema = (match[1] ?? "").toLowerCase();
           if (schema !== ownSchema) {
-            findings.push(finding("sql-foreign-schema", file, `Module "${info.name}" creates schema "${schema}". A module creates only its own schema "${ownSchema}".`, lineAt(match.index)));
+            findings.push(
+              finding(
+                "sql-foreign-schema",
+                file,
+                `Module "${info.name}" creates schema "${schema}". A module creates only its own schema "${ownSchema}".`,
+                lineAt(match.index),
+              ),
+            );
           }
         }
       }

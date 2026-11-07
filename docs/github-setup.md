@@ -78,6 +78,11 @@ every job passes and the update is a patch or a minor update of dependency files
 you. Read what changed in a dependency before merging a major update, especially its install scripts and
 its own new dependencies. Updating a library is a security decision, not housekeeping.
 
+Dependabot also proposes new versions of the container images (the Dockerfile and the Compose files). Those
+pull requests never merge by themselves. Major versions of `node` and `postgres` are ignored in
+`.github/dependabot.yml` because each is a deliberate change (the runtime, and a data migration); the rest you
+review one at a time, after the checks are green.
+
 The merge is made by the workflow itself, after the jobs. It needs no setting beyond the permissions
 already written in `ci.yml`. If the merge step fails with a permission error, check **Settings > Actions
 > General > Workflow permissions** and that no organization policy forbids the permissions the job asks

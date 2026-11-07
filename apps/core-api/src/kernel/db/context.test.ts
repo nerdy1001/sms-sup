@@ -49,14 +49,23 @@ describe("runAs", () => {
         return text === SET_CONTEXT_SQL ? Promise.reject(new Error("no")) : Promise.resolve(undefined);
       },
     };
-    await assert.rejects(runAs(executor, identity, () => Promise.resolve(1)), /no/);
+    await assert.rejects(
+      runAs(executor, identity, () => Promise.resolve(1)),
+      /no/,
+    );
     assert.deepEqual(log, ["begin", SET_CONTEXT_SQL, "rollback"]);
   });
 
   test("an invalid identity never reaches the database", async () => {
     const { executor, log } = recorder();
-    await assert.rejects(runAs(executor, { userId: "1; drop table x", role: "attache" }, () => Promise.resolve(1)), /UUID/);
-    await assert.rejects(runAs(executor, { userId: identity.userId, role: "Admin" }, () => Promise.resolve(1)), /role/);
+    await assert.rejects(
+      runAs(executor, { userId: "1; drop table x", role: "attache" }, () => Promise.resolve(1)),
+      /UUID/,
+    );
+    await assert.rejects(
+      runAs(executor, { userId: identity.userId, role: "Admin" }, () => Promise.resolve(1)),
+      /role/,
+    );
     assert.deepEqual(log, []);
   });
 });

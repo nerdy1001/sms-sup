@@ -26,7 +26,7 @@ export interface Evaluation {
   readonly accepted: Advisory[];
 }
 
-const asLevel = (value: unknown): Level => (LEVELS as readonly unknown[]).includes(value) ? (value as Level) : "moderate";
+const asLevel = (value: unknown): Level => ((LEVELS as readonly unknown[]).includes(value) ? (value as Level) : "moderate");
 
 /** Reads the JSON of `npm audit --json` into a flat list of advisories. */
 export function parseAudit(text: string): ParsedAudit {
@@ -36,9 +36,15 @@ export function parseAudit(text: string): ParsedAudit {
   } catch {
     return { error: "npm audit did not return JSON.", advisories: [] };
   }
-  const root = (typeof data === "object" && data !== null ? data : {}) as { error?: { summary?: string; detail?: string; code?: string }; vulnerabilities?: Record<string, { name?: string; via?: unknown[] }> };
+  const root = (typeof data === "object" && data !== null ? data : {}) as {
+    error?: { summary?: string; detail?: string; code?: string };
+    vulnerabilities?: Record<string, { name?: string; via?: unknown[] }>;
+  };
   if (root.error !== undefined) {
-    return { error: `npm audit failed: ${root.error.summary ?? root.error.code ?? "unknown error"}${root.error.detail === undefined ? "" : ` (${root.error.detail})`}`, advisories: [] };
+    return {
+      error: `npm audit failed: ${root.error.summary ?? root.error.code ?? "unknown error"}${root.error.detail === undefined ? "" : ` (${root.error.detail})`}`,
+      advisories: [],
+    };
   }
   if (root.vulnerabilities === undefined) return { error: "npm audit returned no vulnerability section.", advisories: [] };
 
@@ -48,8 +54,16 @@ export function parseAudit(text: string): ParsedAudit {
       if (typeof via !== "object" || via === null) continue;
       const entry = via as { source?: unknown; name?: unknown; title?: unknown; url?: unknown; severity?: unknown };
       const url = typeof entry.url === "string" ? entry.url : "";
-      const id = /GHSA-[a-z0-9-]+/i.exec(url)?.[0]?.toUpperCase() ?? String(entry.source ?? `${name}-unknown`);
-      const advisory: Advisory = { id, package: typeof entry.name === "string" ? entry.name : (vulnerability.name ?? name), severity: asLevel(entry.severity), title: typeof entry.title === "string" ? entry.title : "", url };
+      const id =
+        /GHSA-[a-z0-9-]+/i.exec(url)?.[0]?.toUpperCase() ??
+        (typeof entry.source === "string" || typeof entry.source === "number" ? String(entry.source) : `${name}-unknown`);
+      const advisory: Advisory = {
+        id,
+        package: typeof entry.name === "string" ? entry.name : (vulnerability.name ?? name),
+        severity: asLevel(entry.severity),
+        title: typeof entry.title === "string" ? entry.title : "",
+        url,
+      };
       seen.set(`${id}|${advisory.package}`, advisory);
     }
   }

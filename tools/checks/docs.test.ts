@@ -9,7 +9,15 @@ afterEach(() => {
   project = undefined;
 });
 
-const SECTIONS = ["What was asked", "What was built", "How it works", "Why it was done this way", "How to check it", "Not included and known gaps", "What comes next"];
+const SECTIONS = [
+  "What was asked",
+  "What was built",
+  "How it works",
+  "Why it was done this way",
+  "How to check it",
+  "Not included and known gaps",
+  "What comes next",
+];
 
 const record = (id: string, status = "Delivered (2026-10-26)", sections = SECTIONS): string =>
   `# ${id}: Title\n\nStatus: ${status}\n\n${sections.map((section) => `## ${section}\n\nText.\n`).join("\n")}`;
@@ -35,7 +43,8 @@ test("a consistent progress log, record and links pass", () => {
     "docs/tasks/FN-01.md": record("FN-01"),
     "docs/tasks/FN-02.md": record("FN-02", "Complete (2026-11-02)"),
     "docs/tasks/_template.md": "# TASK-ID\n",
-    "docs/guide/a.md": "See [the other page](b.md#top) and [the web](https://example.com) and `[code](missing.md)`.\n\n```\n[fenced](missing.md)\n```\n",
+    "docs/guide/a.md":
+      "See [the other page](b.md#top) and [the web](https://example.com) and `[code](missing.md)`.\n\n```\n[fenced](missing.md)\n```\n",
     "docs/guide/b.md": "# B\n",
   });
   assert.deepEqual(findings, []);
@@ -59,17 +68,29 @@ describe("task records", () => {
   });
 
   test("a record that lacks required sections", () => {
-    const found = run({ "docs/progress.md": progress(row("FN-01")), "docs/tasks/FN-01.md": record("FN-01", "Delivered (2026-10-26)", SECTIONS.slice(0, 5)) });
-    assert.deepEqual(found.map((item) => item.message).sort(), ['Missing section "## Not included and known gaps".', 'Missing section "## What comes next".']);
+    const found = run({
+      "docs/progress.md": progress(row("FN-01")),
+      "docs/tasks/FN-01.md": record("FN-01", "Delivered (2026-10-26)", SECTIONS.slice(0, 5)),
+    });
+    assert.deepEqual(found.map((item) => item.message).sort(), [
+      'Missing section "## Not included and known gaps".',
+      'Missing section "## What comes next".',
+    ]);
   });
 
   test("a record whose title does not start with the task ID", () => {
-    const found = run({ "docs/progress.md": progress(row("FN-01")), "docs/tasks/FN-01.md": record("FN-01").replace("# FN-01", "# Something else") });
+    const found = run({
+      "docs/progress.md": progress(row("FN-01")),
+      "docs/tasks/FN-01.md": record("FN-01").replace("# FN-01", "# Something else"),
+    });
     assert.ok(found.some((item) => /first line must be a heading/.test(item.message)));
   });
 
   test("the status In progress is accepted when the log and the record agree", () => {
-    const found = run({ "docs/progress.md": progress(row("FN-01", "In progress")), "docs/tasks/FN-01.md": record("FN-01", "In progress (2026-10-26)") });
+    const found = run({
+      "docs/progress.md": progress(row("FN-01", "In progress")),
+      "docs/tasks/FN-01.md": record("FN-01", "In progress (2026-10-26)"),
+    });
     assert.deepEqual(found, []);
   });
 
@@ -80,7 +101,12 @@ describe("task records", () => {
 
   test("an unknown status, a bad date, a missing link and a duplicate row", () => {
     const found = run({
-      "docs/progress.md": progress(row("FN-01", "Done"), row("FN-02", "Delivered", "26/10/2026"), row("FN-03", "Delivered", "2026-10-26", "see below"), row("FN-03")),
+      "docs/progress.md": progress(
+        row("FN-01", "Done"),
+        row("FN-02", "Delivered", "26/10/2026"),
+        row("FN-03", "Delivered", "2026-10-26", "see below"),
+        row("FN-03"),
+      ),
     });
     const messages = found.map((item) => item.message).join("\n");
     assert.match(messages, /status "Done"/);
@@ -98,15 +124,24 @@ describe("task records", () => {
 describe("links", () => {
   test("a link to a file that does not exist", () => {
     const found = run({ "README.md": "See [guide](docs/missing.md).\n" });
-    assert.deepEqual(found.map((item) => item.rule), ["doc-broken-link"]);
+    assert.deepEqual(
+      found.map((item) => item.rule),
+      ["doc-broken-link"],
+    );
   });
 
   test("relative links are resolved from the folder of the file", () => {
-    assert.deepEqual(run({ "docs/guide/a.md": "[up](../boundaries.md) [dir](../adr/)\n", "docs/boundaries.md": "# B\n", "docs/adr/0001.md": "# A\n" }), []);
+    assert.deepEqual(
+      run({ "docs/guide/a.md": "[up](../boundaries.md) [dir](../adr/)\n", "docs/boundaries.md": "# B\n", "docs/adr/0001.md": "# A\n" }),
+      [],
+    );
   });
 
   test("a link that climbs out of the repository is reported", () => {
     const found = run({ "README.md": "[outside](../../etc/passwd)\n" });
-    assert.deepEqual(found.map((item) => item.rule), ["doc-broken-link"]);
+    assert.deepEqual(
+      found.map((item) => item.rule),
+      ["doc-broken-link"],
+    );
   });
 });

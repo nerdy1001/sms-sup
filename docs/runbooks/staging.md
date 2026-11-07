@@ -99,7 +99,8 @@ Now give the server its settings:
 sudo /opt/staging/bin/init-staging.sh <NAME>
 ```
 
-This creates the database password on the server (it exists nowhere else) and the settings file.
+This creates two database passwords on the server (they exist nowhere else) and the settings file. One
+password belongs to the owner of the database, the other to the role the application uses.
 
 ## Part D. Connect GitHub (about 10 minutes)
 
@@ -136,7 +137,10 @@ The deploy job runs only when `STAGING_HOST` exists, so nothing deploys until yo
 From your computer (Tailscale running):
 
 1. Open `https://<NAME>/health`. Expected: a small JSON answer with `"status":"ok"` and `"version"`
-   equal to the commit that was deployed.
+   equal to the commit that was deployed. Then open `https://<NAME>/ready`. Expected: `{"status":"ready"}`.
+   That one asks the database, so it proves that the migration step ran and that the application can log
+   in with its own password. If `/health` answers and `/ready` answers 503, read the migration output in the
+   `deploy-staging` job and send it to me.
 2. Open `https://<NAME>:8025`. Expected: the mail catcher page, empty.
 3. From a computer or phone that is **not** on Tailscale, open the same addresses. Expected: they do not
    open. This is the test that matters most.
@@ -160,6 +164,7 @@ From your computer (Tailscale running):
 | See the containers | On the server: `sudo docker ps` |
 | Read the emails staging sent | Open `https://<NAME>:8025` |
 | List backups | On the server: `ls -l /var/backups/staging`; the log is `/var/log/staging-backup.log` |
+| Run the migrations again by hand | On the server, as `admin`, from the folder of the current release: `sudo docker compose --env-file /opt/staging/.env -f /opt/staging/releases/<commit>/compose.yaml run --rm --no-deps migrate` (set `APP_VERSION=<commit>` and `TAILSCALE_IP=$(tailscale ip -4)` first). Safe to repeat. |
 | Restore a backup | `sudo /opt/staging/bin/restore.sh apply /var/backups/staging/<file> yes` (replaces the data) |
 | Rebuild the server from nothing | Destroy the droplet, delete the old machine in the Tailscale console, repeat parts B to D, and update `STAGING_HOST` and `STAGING_HOST_KEY` |
 
@@ -174,7 +179,13 @@ From your computer (Tailscale running):
 | `the image ... does not exist in its registry` | An image tag in `infra/staging/compose.yaml` was chosen without being checked | Run `docker manifest inspect <image>` on the server to find a real tag, change it in the file, and open a pull request |
 | `this server has no Tailscale address` | Part C was not done or the machine was removed | Run `sudo tailscale up --hostname=sms-staging` again |
 | The page does not open, or the browser warns about the certificate | HTTPS Certificates is off in the Tailscale console, or Caddy cannot reach the Tailscale socket | Turn it on (A3); read `sudo docker logs staging-caddy-1`; send me the output. As a fallback, `tailscale serve` can terminate HTTPS instead of Caddy |
+| `the database migration failed; version ... was not started` | A migration file has an error, or the database is unreachable | Read the lines above it in the job output. The previous version is still running and nothing new started. Fix the migration in a new commit; never edit one that has been applied |
+| `The database has migrations that no file explains` | The server has a migration that this commit does not contain (for example you deployed an older commit) | Deploy a commit that contains it, or restore a backup taken before it |
 | `version ... failed its health check` and `rolled back` | The new build does not start | Read the application log; the previous version is already running again |
+
+Each deployment now runs the database migrations before the new version starts, and takes a backup first (except
+the very first time). A rollback does not undo a migration, so every migration must also work for the version
+before it; the rule is in [ADR 0005](../adr/0005-staging-environment.md), decision 10.
 
 When you ask me for help, include: which part and step, the exact command, and the full output.
 

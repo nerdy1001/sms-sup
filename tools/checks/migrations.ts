@@ -86,8 +86,10 @@ export function splitStatements(sql: string): Statement[] {
 
 const CREATE_TABLE = /^create\s+(?:unlogged\s+)?table\s+(?:if\s+not\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?\s*\.\s*"?([a-z_][a-z0-9_]*)"?/i;
 const CREATE_TABLE_ANY = /^create\s+(?:(?:global\s+|local\s+)?(?:temporary|temp)\s+|unlogged\s+)?table\b/i;
-const CREATE_OBJECT = /^create\s+(?:or\s+replace\s+)?(?:table|view|materialized\s+view|sequence|type|function|procedure)\s+(?:if\s+not\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?(\s*\.)?/i;
-const REFERENCE = /\b(?:from|join|into|update|truncate|references|table|view|sequence|function|type|on)\s+(?:only\s+)?(?:if\s+(?:not\s+)?exists\s+)?"?([a-z_][a-z0-9_]*)"?\s*\.\s*"?([a-z_][a-z0-9_]*)"?/gi;
+const CREATE_OBJECT =
+  /^create\s+(?:or\s+replace\s+)?(?:table|view|materialized\s+view|sequence|type|function|procedure)\s+(?:if\s+not\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?(\s*\.)?/i;
+const REFERENCE =
+  /\b(?:from|join|into|update|truncate|references|table|view|sequence|function|type|on)\s+(?:only\s+)?(?:if\s+(?:not\s+)?exists\s+)?"?([a-z_][a-z0-9_]*)"?\s*\.\s*"?([a-z_][a-z0-9_]*)"?/gi;
 
 export function checkMigrations(root: string): CheckResult {
   const findings: Finding[] = [];
@@ -100,7 +102,13 @@ export function checkMigrations(root: string): CheckResult {
     const statements = splitStatements(text);
 
     if (!FILE_NAME.test(described.name)) {
-      findings.push(finding("migration-name", file, 'Name the file like "0001_short_description.sql": four digits, then lowercase words joined by underscores.'));
+      findings.push(
+        finding(
+          "migration-name",
+          file,
+          'Name the file like "0001_short_description.sql": four digits, then lowercase words joined by underscores.',
+        ),
+      );
     } else {
       const group = `${described.app}/${described.scope}/${described.kind}`;
       const list = numbers.get(group) ?? [];
@@ -111,7 +119,14 @@ export function checkMigrations(root: string): CheckResult {
     if (described.kind === "seed") {
       for (const statement of statements) {
         if (/^insert\b/i.test(statement.text) && !/\bon\s+conflict\b/i.test(statement.text)) {
-          findings.push(finding("seed-not-repeatable", file, "A seed runs every time the data is refreshed. Add `on conflict (...) do nothing` (or `do update`) so that a second run changes nothing.", statement.line));
+          findings.push(
+            finding(
+              "seed-not-repeatable",
+              file,
+              "A seed runs every time the data is refreshed. Add `on conflict (...) do nothing` (or `do update`) so that a second run changes nothing.",
+              statement.line,
+            ),
+          );
         }
       }
       continue;
@@ -120,9 +135,15 @@ export function checkMigrations(root: string): CheckResult {
     const rlsEnabled = new Set<string>();
     const rlsForced = new Set<string>();
     for (const statement of statements) {
-      const enable = /^alter\s+table\s+(?:only\s+)?(?:if\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?\s*\.\s*"?([a-z_][a-z0-9_]*)"?\s+enable\s+row\s+level\s+security\b/i.exec(statement.text);
+      const enable =
+        /^alter\s+table\s+(?:only\s+)?(?:if\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?\s*\.\s*"?([a-z_][a-z0-9_]*)"?\s+enable\s+row\s+level\s+security\b/i.exec(
+          statement.text,
+        );
       if (enable !== null) rlsEnabled.add(`${(enable[1] ?? "").toLowerCase()}.${(enable[2] ?? "").toLowerCase()}`);
-      const force = /^alter\s+table\s+(?:only\s+)?(?:if\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?\s*\.\s*"?([a-z_][a-z0-9_]*)"?\s+force\s+row\s+level\s+security\b/i.exec(statement.text);
+      const force =
+        /^alter\s+table\s+(?:only\s+)?(?:if\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?\s*\.\s*"?([a-z_][a-z0-9_]*)"?\s+force\s+row\s+level\s+security\b/i.exec(
+          statement.text,
+        );
       if (force !== null) rlsForced.add(`${(force[1] ?? "").toLowerCase()}.${(force[2] ?? "").toLowerCase()}`);
     }
 
@@ -131,39 +152,107 @@ export function checkMigrations(root: string): CheckResult {
       if (created !== null) {
         const name = `${(created[1] ?? "").toLowerCase()}.${(created[2] ?? "").toLowerCase()}`;
         if (!rlsEnabled.has(name)) {
-          findings.push(finding("migration-rls-missing", file, `The table ${name} is created without \`alter table ${name} enable row level security\` in the same file. Without it every role that can read the table reads every row. Add it, and the policies that let the right people in.`, statement.line));
+          findings.push(
+            finding(
+              "migration-rls-missing",
+              file,
+              `The table ${name} is created without \`alter table ${name} enable row level security\` in the same file. Without it every role that can read the table reads every row. Add it, and the policies that let the right people in.`,
+              statement.line,
+            ),
+          );
         } else if (!rlsForced.has(name)) {
-          findings.push(finding("migration-rls-not-forced", file, `Add \`alter table ${name} force row level security\`. Without it the owner of the table skips every policy.`, statement.line));
+          findings.push(
+            finding(
+              "migration-rls-not-forced",
+              file,
+              `Add \`alter table ${name} force row level security\`. Without it the owner of the table skips every policy.`,
+              statement.line,
+            ),
+          );
         }
       } else if (CREATE_TABLE_ANY.test(statement.text) && !/^create\s+(?:global\s+|local\s+)?(?:temporary|temp)\b/i.test(statement.text)) {
-        findings.push(finding("migration-unqualified-object", file, "Write the schema in front of the table name (platform.users), so that it cannot land in the wrong schema.", statement.line));
+        findings.push(
+          finding(
+            "migration-unqualified-object",
+            file,
+            "Write the schema in front of the table name (platform.users), so that it cannot land in the wrong schema.",
+            statement.line,
+          ),
+        );
       }
 
       if (/^(begin|commit|rollback|start\s+transaction|end|savepoint|release)\b/i.test(statement.text)) {
-        findings.push(finding("migration-transaction-control", file, "Do not write begin, commit or rollback. The runner wraps every migration in one transaction together with its record, so a failed migration leaves nothing behind.", statement.line));
+        findings.push(
+          finding(
+            "migration-transaction-control",
+            file,
+            "Do not write begin, commit or rollback. The runner wraps every migration in one transaction together with its record, so a failed migration leaves nothing behind.",
+            statement.line,
+          ),
+        );
       }
 
       if (/\bgrant\b[\s\S]*\bto\s+public\b/i.test(statement.text)) {
-        findings.push(finding("migration-grant-public", file, "Do not grant anything to public: it means every role, including ones created later. Grant to a named role.", statement.line));
+        findings.push(
+          finding(
+            "migration-grant-public",
+            file,
+            "Do not grant anything to public: it means every role, including ones created later. Grant to a named role.",
+            statement.line,
+          ),
+        );
       }
 
-      if (/^create\s+(?:or\s+replace\s+)?(?:function|procedure)\b/i.test(statement.text) && /\bsecurity\s+definer\b/i.test(statement.text) && !/\bset\s+search_path\b/i.test(statement.text)) {
-        findings.push(finding("migration-security-definer", file, "A security definer function runs with its owner's rights, so it must fix its search_path (`set search_path = pg_catalog`), or a caller can make it run their own code.", statement.line));
+      if (
+        /^create\s+(?:or\s+replace\s+)?(?:function|procedure)\b/i.test(statement.text) &&
+        /\bsecurity\s+definer\b/i.test(statement.text) &&
+        !/\bset\s+search_path\b/i.test(statement.text)
+      ) {
+        findings.push(
+          finding(
+            "migration-security-definer",
+            file,
+            "A security definer function runs with its owner's rights, so it must fix its search_path (`set search_path = pg_catalog`), or a caller can make it run their own code.",
+            statement.line,
+          ),
+        );
       }
 
       if (/^(drop\s+(table|schema|column)|truncate|alter\s+table[\s\S]*\bdrop\s+column)\b/i.test(statement.text)) {
-        findings.push(finding("migration-destructive", file, "This deletes data for good. Check that a backup exists and that nothing still reads it.", statement.line, "warning"));
+        findings.push(
+          finding(
+            "migration-destructive",
+            file,
+            "This deletes data for good. Check that a backup exists and that nothing still reads it.",
+            statement.line,
+            "warning",
+          ),
+        );
       }
 
       if (described.scope === "platform") {
         const own = CREATE_OBJECT.exec(statement.text);
         if (own !== null && own[2] === undefined) {
-          findings.push(finding("migration-unqualified-object", file, `"${own[1] ?? ""}" is created without a schema. Write platform.${own[1] ?? ""}.`, statement.line));
+          findings.push(
+            finding(
+              "migration-unqualified-object",
+              file,
+              `"${own[1] ?? ""}" is created without a schema. Write platform.${own[1] ?? ""}.`,
+              statement.line,
+            ),
+          );
         }
         for (const match of statement.text.matchAll(REFERENCE)) {
           const schema = (match[1] ?? "").toLowerCase();
           if (schema !== "platform" && !SYSTEM_SCHEMAS.has(schema)) {
-            findings.push(finding("migration-foreign-schema", file, `A platform migration touches ${schema}.${match[2] ?? ""}. The kernel owns only the schema "platform".`, statement.line));
+            findings.push(
+              finding(
+                "migration-foreign-schema",
+                file,
+                `A platform migration touches ${schema}.${match[2] ?? ""}. The kernel owns only the schema "platform".`,
+                statement.line,
+              ),
+            );
           }
         }
       }
@@ -176,7 +265,15 @@ export function checkMigrations(root: string): CheckResult {
       const expected = index + 1;
       if (item.number !== expected) {
         const duplicate = sorted[index - 1]?.number === item.number;
-        findings.push(finding("migration-sequence", item.file, duplicate ? `Two files in ${group} share the number ${String(item.number).padStart(4, "0")}. Renumber the newer one.` : `The numbers in ${group} must run 0001, 0002, ... without gaps; expected ${String(expected).padStart(4, "0")} here.`));
+        findings.push(
+          finding(
+            "migration-sequence",
+            item.file,
+            duplicate
+              ? `Two files in ${group} share the number ${String(item.number).padStart(4, "0")}. Renumber the newer one.`
+              : `The numbers in ${group} must run 0001, 0002, ... without gaps; expected ${String(expected).padStart(4, "0")} here.`,
+          ),
+        );
       }
     });
   }

@@ -100,7 +100,9 @@ describe("compose rules", () => {
 describe("references to production", () => {
   test("a production host name in staging is reported", () => {
     assert.deepEqual(rules({ "infra/staging/Caddyfile": "scholarships.minesup.gov.cm {\n}\n" }), ["infra-forbidden-reference"]);
-    assert.deepEqual(rules({ "infra/staging/compose.yaml": "services:\n  a:\n    environment:\n      HOST: db.prod.internal\n" }), ["infra-forbidden-reference"]);
+    assert.deepEqual(rules({ "infra/staging/compose.yaml": "services:\n  a:\n    environment:\n      HOST: db.prod.internal\n" }), [
+      "infra-forbidden-reference",
+    ]);
   });
 
   test("a comment may talk about production", () => {
@@ -125,7 +127,8 @@ describe("shell scripts", () => {
 });
 
 describe("generated server file", () => {
-  const TEMPLATE = 'users:\n  - name: deploy\n    ssh_authorized_keys:\n      - \'restrict,command="/opt/staging/bin/x.sh" __DEPLOY_PUBLIC_KEY__\'\nfiles:\n  - content: |\n      {{file:infra/staging/bin/x.sh}}\n';
+  const TEMPLATE =
+    "users:\n  - name: deploy\n    ssh_authorized_keys:\n      - 'restrict,command=\"/opt/staging/bin/x.sh\" __DEPLOY_PUBLIC_KEY__'\nfiles:\n  - content: |\n      {{file:infra/staging/bin/x.sh}}\n";
   const SCRIPT = "set -euo pipefail\necho hi\n";
   const files = (rendered?: string): Record<string, string> => ({
     "infra/staging/cloud-init.template.yaml": TEMPLATE,
@@ -157,7 +160,11 @@ describe("generated server file", () => {
 
   test("a deploy key without restrictions is reported", () => {
     const loose = TEMPLATE.replace('restrict,command="/opt/staging/bin/x.sh" ', "");
-    const found = rules({ "infra/staging/cloud-init.template.yaml": loose, "infra/staging/bin/x.sh": SCRIPT, "infra/staging/cloud-init.yaml": loose.replace("      {{file:infra/staging/bin/x.sh}}", "      set -euo pipefail\n      echo hi") });
+    const found = rules({
+      "infra/staging/cloud-init.template.yaml": loose,
+      "infra/staging/bin/x.sh": SCRIPT,
+      "infra/staging/cloud-init.yaml": loose.replace("      {{file:infra/staging/bin/x.sh}}", "      set -euo pipefail\n      echo hi"),
+    });
     assert.deepEqual(found, ["infra-deploy-key-unrestricted"]);
   });
 });

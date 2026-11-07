@@ -26,7 +26,8 @@ test("a module that only touches its own schema and the shared one passes", () =
       "insert into platform.audit_log (event) values ('x');",
       "select * from pg_catalog.pg_tables;",
     ].join("\n"),
-    [`${dir}/internal/infrastructure/repo.ts`]: 'export const q = "select id from registry.scholars where id = $1";\nexport const r = `insert into registry.scholars (id) values (${1})`;\n',
+    [`${dir}/internal/infrastructure/repo.ts`]:
+      'export const q = "select id from registry.scholars where id = $1";\nexport const r = `insert into registry.scholars (id) values (${1})`;\n',
   });
   assert.deepEqual(found, []);
 });
@@ -38,12 +39,18 @@ describe("violations", () => {
   });
 
   test("a join in a template literal reaches into another schema, with the right line number", () => {
-    const found = run({ [`${dir}/internal/infrastructure/repo.ts`]: "export const a = 1;\nexport const q = `\n  select 1\n  from registry.scholars s\n  join documents.files f on f.id = s.id\n`;\n" });
+    const found = run({
+      [`${dir}/internal/infrastructure/repo.ts`]:
+        "export const a = 1;\nexport const q = `\n  select 1\n  from registry.scholars s\n  join documents.files f on f.id = s.id\n`;\n",
+    });
     assert.deepEqual(found, [{ rule: "sql-foreign-schema", line: 5 }]);
   });
 
   test("a migration references or creates in another schema", () => {
-    const found = run({ [`${dir}/migrations/002.sql`]: "alter table registry.x add column y int;\ncreate table commitments.c (id int);\ncreate schema other;\n" });
+    const found = run({
+      [`${dir}/migrations/002.sql`]:
+        "alter table registry.x add column y int;\ncreate table commitments.c (id int);\ncreate schema other;\n",
+    });
     assert.deepEqual(found.map((item) => item.rule).sort(), ["sql-foreign-schema", "sql-foreign-schema"]);
   });
 
@@ -53,8 +60,13 @@ describe("violations", () => {
   });
 
   test("a view and a function are created without a schema", () => {
-    const found = run({ [`${dir}/migrations/004.sql`]: "create or replace view v as select 1;\ncreate function f() returns int language sql as 'select 1';\n" });
-    assert.deepEqual(found.map((item) => item.rule), ["sql-unqualified-object", "sql-unqualified-object"]);
+    const found = run({
+      [`${dir}/migrations/004.sql`]: "create or replace view v as select 1;\ncreate function f() returns int language sql as 'select 1';\n",
+    });
+    assert.deepEqual(
+      found.map((item) => item.rule),
+      ["sql-unqualified-object", "sql-unqualified-object"],
+    );
   });
 });
 
@@ -76,7 +88,13 @@ describe("things that are not SQL are left alone", () => {
   test("a schema listed in extraSchemas is allowed", () => {
     project = createProject({
       ...moduleFiles("core-api", "registry", "RG"),
-      [`${dir}/module.json`]: JSON.stringify({ code: "RG", name: "registry", title: "r", dependsOn: [], database: { schema: "registry", extraSchemas: ["documents"] } }),
+      [`${dir}/module.json`]: JSON.stringify({
+        code: "RG",
+        name: "registry",
+        title: "r",
+        dependsOn: [],
+        database: { schema: "registry", extraSchemas: ["documents"] },
+      }),
       [`${dir}/migrations/006.sql`]: "select * from documents.files;\n",
     });
     assert.deepEqual(checkSql(project.root).findings, []);

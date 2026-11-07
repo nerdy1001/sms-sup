@@ -1,5 +1,5 @@
 # Optional services for development on your own computer. The application itself runs directly with
-# Node (npm run dev, from task FN-05); only the database and the mail catcher need containers.
+# Node (npm run dev); only the database and the mail catcher need containers.
 # The database commands are npm scripts: npm run db:up, db:migrate, db:seed, db:reset (docs/runbooks/local-database.md).
 # Everything is bound to 127.0.0.1, so nothing is reachable from other computers.
 #

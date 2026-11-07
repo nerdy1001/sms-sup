@@ -33,6 +33,25 @@ Words used in this project and this repository.
 | **Contract** | An agreed data shape shared between zones, in `packages/contracts`. |
 | **Schema (database)** | A named group of tables inside PostgreSQL. Each module owns one. |
 | **Audit trail** | The permanent record of who did what and when. |
+| **Tailscale** | The private network that makes staging reachable only from machines you approved. Explained in [8. Staging](08-staging-explained.md). |
+| **Fastify** | The web framework that receives requests for the staff application. Explained in [7. Fastify](07-fastify.md). |
+| **Hook** | A function that Fastify calls at a fixed moment of every request, such as before the handler runs. Used for the sign-in check and the request log. |
+| **Plugin (Fastify)** | A function that adds routes and hooks to the application, registered with `register`. Each module's routes are one. What it adds stays inside it. |
+| **Handler** | The function that answers one route. |
+| **Lifecycle** | The fixed order of steps one request goes through in Fastify, from `onRequest` to `onResponse`. |
+| **Route** | One address and method that the API answers, for example `GET /health`, together with who may call it and what it accepts and returns. |
+| **Access declaration** | The line `config: { access: ... }` that every route must have. It says who may call the route. Without it the application does not start. |
+| **Identity** | The signed-in staff member (their id and role) that a request carries once sign-in exists. The database policies read it. |
+| **Problem details** | The standard format (RFC 9457) of every error answer: a stable code, a title, a sentence for developers and the request identifier. |
+| **Error code** | The stable name of a kind of failure, such as `not_found`. The front end translates by code, so the wording can be French or English. |
+| **Request identifier** | A number given to each request. It appears in the log line, in the error answer and in the `x-request-id` header, so one request can be followed. |
+| **Redaction** | Replacing a sensitive field in a log line by `[redacted]` before it is written. A safety net for logging by mistake. |
+| **Health and ready** | Two questions a machine asks. `/health`: is the program running? `/ready`: can it reach its database? |
+| **Connection pool** | A set of open database connections that requests borrow one at a time. |
+| **Secret file** | A file that holds a password, whose path is given to the application (`DATABASE_PASSWORD_FILE`), so the secret never sits in an environment variable. |
+| **OpenAPI** | A standard way to describe an API in a file. Ours is generated from the routes (`docs/api/openapi.json`). |
+| **Rate limit** | A cap on how many requests one address can make in a minute. |
+| **Schema (zod)** | A description of the shape of some data, used to check it, to give it a TypeScript type and to describe it in the API document. Not the same as a database schema. |
 
 ## The repository and tools
 
@@ -41,6 +60,7 @@ Words used in this project and this repository.
 | **Monorepo** | Several programs and packages kept in one repository. |
 | **Workspace** | A folder npm treats as a package inside the monorepo. |
 | **Lock file** | `package-lock.json`: the exact versions of every library, so everyone installs the same thing. |
+| **Dependency register** | `docs/dependencies.md`: one row for every library, saying what it is for, why it was not written by hand, what to do if it is abandoned and where it may be imported. A check enforces it. |
 | **Pinning** | Writing an exact version (`6.0.3`) instead of a range, so an update is always a visible change. |
 | **Supply chain attack** | An attack that comes through a library you installed. Install scripts are a common route, which is why they are switched off. |
 | **Type stripping** | Node 22.18 and later can run TypeScript by removing the types when it loads a file, with no build step. |
@@ -81,4 +101,17 @@ Words used in this project and this repository.
 | **Session setting** | A value attached to a database connection. The application sets `app.user_id` and `app.role` for each request so that the policies know who is asking. |
 | **Append-only** | A table that can be added to but not changed or emptied, like the audit log. |
 | **Synthetic data** | Invented data that looks like real data but belongs to no one. The addresses end in `.invalid`. |
-| **psql** | PostgreSQL's command-line program. The migration runner sends SQL through it. |
+| **psql** | PostgreSQL's command-line program. `npm run db:psql` opens it inside the local container. The migration runner no longer uses it (it uses the `pg` driver). |
+| **Audit log** | The table that records who did what to which record and when. It only grows, and holds identifiers, never personal data. |
+| **Audit action** | The name of what was done, written as object and verb, for example `scholar.update`. A route declares it in its configuration. |
+| **Front end** | The part of the system that runs in the browser. Here: `apps/staff-web`. |
+| **Static files** | Files sent as they are, with no program running to make them. The built front end is a folder of them. |
+| **Component (React)** | A function that returns a piece of the screen. Screens are built by placing components inside each other. |
+| **Vite** | The tool that builds the front end into static files and runs the development page. |
+| **Vitest** | The test runner for the front end. It pretends to be a browser (jsdom). |
+| **Content Security Policy** | A header that tells the browser which addresses a page may load scripts and data from. Staging allows only its own address. |
+| **i18n (internationalisation)** | Making a page usable in several languages. Here done with the i18next library. |
+| **Message catalogue** | The list of texts of the screens, once per language, found by a key. |
+| **Synthetic data** | Invented people, schools and payments that look like a real caseload and cannot be mistaken for one (identifiers start with SYN-, e-mail addresses end in .invalid). The only kind of data allowed outside production. |
+| **Edge case label** | A tag on a synthetic scholar that says it has a deliberately awkward case, such as a repeated year or a rejected payment. Tests use it to ask for that case. |
+| **Reference date** | The fixed "today" inside the synthetic data (2026-11-05), so the data does not change with the clock. |

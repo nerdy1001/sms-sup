@@ -78,5 +78,8 @@ If a check fails, the merge button stays blocked. That is the point.
 - How a module is built, and the four layers: [03-modules.md](03-modules.md)
 - What each check does and how to read its messages: [04-checks.md](04-checks.md)
 - Day-to-day working: [05-working-here.md](05-working-here.md)
+- Adding a route to the API: [06-writing-a-route.md](06-writing-a-route.md)
+- The web framework, Fastify, explained: [07-fastify.md](07-fastify.md)
+- Staging and Tailscale explained from zero: [08-staging-explained.md](08-staging-explained.md)
 - Words you may not know: [glossary.md](glossary.md)
 - What has been done so far: [../progress.md](../progress.md)

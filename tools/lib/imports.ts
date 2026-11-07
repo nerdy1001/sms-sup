@@ -20,7 +20,13 @@ export interface ImportScan {
 }
 
 export function parseSource(fileName: string, text: string): ts.SourceFile {
-  return ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  return ts.createSourceFile(
+    fileName,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
 }
 
 export function lineOf(sourceFile: ts.SourceFile, node: ts.Node): number {
@@ -43,11 +49,7 @@ export function scanImports(sourceFile: ts.SourceFile): ImportScan {
         typeOnly: node.importClause?.isTypeOnly === true,
         kind: "static",
       });
-    } else if (
-      ts.isExportDeclaration(node) &&
-      node.moduleSpecifier !== undefined &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    ) {
+    } else if (ts.isExportDeclaration(node) && node.moduleSpecifier !== undefined && ts.isStringLiteral(node.moduleSpecifier)) {
       imports.push({
         specifier: node.moduleSpecifier.text,
         line: lineOf(sourceFile, node),

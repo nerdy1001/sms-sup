@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 
 export interface Project {
   readonly root: string;
-  write(path: string, content: string): void;
+  write: (path: string, content: string) => void;
   remove(path: string): void;
   cleanup(): void;
 }
@@ -12,7 +12,11 @@ export interface Project {
 const json = (value: unknown): string => `${JSON.stringify(value, null, 2)}\n`;
 
 /** A minimal repository with both applications and the contracts package. */
+const REGISTER_HEADER =
+  "| Package | Used by | What it is for | Why not written by hand | If it is abandoned | Where it may be imported |\n|---|---|---|---|---|---|\n";
+
 export const BASE_FILES: Readonly<Record<string, string>> = {
+  "docs/dependencies.md": `${REGISTER_HEADER}| \`typescript\` | root | The compiler used by the fixture. | It is the fixture's only dependency. | Replace it with another one. | Everywhere in the fixture. |\n`,
   ".npmrc": "save-exact=true\nignore-scripts=true\nengine-strict=true\n",
   "package-lock.json": json({ lockfileVersion: 3, packages: { "": { name: "fixture" } } }),
   "package.json": json({ name: "fixture", private: true, devDependencies: { typescript: "6.0.3" } }),

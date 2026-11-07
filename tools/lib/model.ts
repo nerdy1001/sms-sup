@@ -8,13 +8,7 @@ export interface Finding {
   readonly message: string;
 }
 
-export function finding(
-  rule: string,
-  file: string,
-  message: string,
-  line?: number,
-  severity: Severity = "error",
-): Finding {
+export function finding(rule: string, file: string, message: string, line?: number, severity: Severity = "error"): Finding {
   return { rule, severity, file, line, message };
 }
 

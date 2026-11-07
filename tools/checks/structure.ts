@@ -6,7 +6,7 @@ import { plannedModules } from "../rules.config.ts";
 
 const ALLOWED_MODULE_ENTRIES = ["module.json", "index.ts", "module.ts", "module.test.ts", "README.md", "internal", "migrations"];
 const REQUIRED_MODULE_FILES = ["index.ts", "module.ts", "README.md"];
-const FILE_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.(?:test|config|d))?\.ts$/;
+const FILE_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.(?:test|spec|config|d))?\.tsx?$/;
 const DIRECTORY_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export function checkStructure(root: string): CheckResult {
@@ -20,7 +20,13 @@ export function checkStructure(root: string): CheckResult {
       const key = `${info.app}:${info.manifest.code}`;
       const other = seenCodes.get(key);
       if (other !== undefined) {
-        findings.push(finding("module-code-unique", `${info.dir}/module.json`, `Code ${info.manifest.code} is already used by ${other} in ${info.app}.`));
+        findings.push(
+          finding(
+            "module-code-unique",
+            `${info.dir}/module.json`,
+            `Code ${info.manifest.code} is already used by ${other} in ${info.app}.`,
+          ),
+        );
       }
       seenCodes.set(key, info.dir);
     }
@@ -44,14 +50,22 @@ function checkModule(root: string, info: ModuleInfo, findings: Finding[]): void 
   }
   for (const entry of info.entries) {
     if (!ALLOWED_MODULE_ENTRIES.includes(entry)) {
-      report("module-layout", `Unexpected "${entry}" at the module root. Code belongs in internal/<layer>/. Allowed at the root: ${ALLOWED_MODULE_ENTRIES.join(", ")}.`, `${info.dir}/${entry}`);
+      report(
+        "module-layout",
+        `Unexpected "${entry}" at the module root. Code belongs in internal/<layer>/. Allowed at the root: ${ALLOWED_MODULE_ENTRIES.join(", ")}.`,
+        `${info.dir}/${entry}`,
+      );
     }
   }
   if (info.entries.includes("internal")) {
     for (const entry of listEntries(root, `${info.dir}/internal`)) {
       const isLayer = (LAYERS as readonly string[]).includes(entry) && listDirectories(root, `${info.dir}/internal`).includes(entry);
       if (!isLayer) {
-        report("module-layout", `"internal/${entry}" is not a layer folder. Allowed: ${LAYERS.join(", ")}.`, `${info.dir}/internal/${entry}`);
+        report(
+          "module-layout",
+          `"internal/${entry}" is not a layer folder. Allowed: ${LAYERS.join(", ")}.`,
+          `${info.dir}/internal/${entry}`,
+        );
       }
     }
   }
@@ -61,11 +75,17 @@ function checkModule(root: string, info: ModuleInfo, findings: Finding[]): void 
 
   if (manifest.name !== info.name) report("module-manifest", `"name" is "${manifest.name}" but the folder is "${info.name}".`);
   if (manifest.database.schema !== snakeCase(info.name)) {
-    report("module-schema", `The database schema of module "${info.name}" must be "${snakeCase(info.name)}" (found "${manifest.database.schema}").`);
+    report(
+      "module-schema",
+      `The database schema of module "${info.name}" must be "${snakeCase(info.name)}" (found "${manifest.database.schema}").`,
+    );
   }
   const planned = plannedModules.find((entry) => entry.app === info.app && entry.name === info.name);
   if (planned === undefined) {
-    report("module-planned", `Module "${info.name}" is not in the delivery plan for ${info.app}. Add it to plannedModules in tools/rules.config.ts and to docs/architecture/modules.md first.`);
+    report(
+      "module-planned",
+      `Module "${info.name}" is not in the delivery plan for ${info.app}. Add it to plannedModules in tools/rules.config.ts and to docs/architecture/modules.md first.`,
+    );
   } else if (planned.code !== manifest.code) {
     report("module-planned", `Module "${info.name}" has code ${manifest.code} but the plan says ${planned.code}.`);
   }
@@ -82,7 +102,9 @@ function checkDependencies(modules: readonly ModuleInfo[], findings: Finding[]):
         if (dependency === info.name) {
           findings.push(finding("module-dependencies", `${info.dir}/module.json`, "A module cannot depend on itself."));
         } else if (!names.has(dependency)) {
-          findings.push(finding("module-dependencies", `${info.dir}/module.json`, `dependsOn lists "${dependency}", which is not a module of ${app}.`));
+          findings.push(
+            finding("module-dependencies", `${info.dir}/module.json`, `dependsOn lists "${dependency}", which is not a module of ${app}.`),
+          );
         }
       }
     }
@@ -93,7 +115,13 @@ function checkDependencies(modules: readonly ModuleInfo[], findings: Finding[]):
       if (state.get(name) === "done") return;
       if (state.get(name) === "visiting") {
         const cycle = [...path.slice(path.indexOf(name)), name];
-        findings.push(finding("module-dependencies", `apps/${app}/src/modules/${name}/module.json`, `Circular module dependency: ${cycle.join(" -> ")}. Break the cycle (for example with an event) instead of declaring it.`));
+        findings.push(
+          finding(
+            "module-dependencies",
+            `apps/${app}/src/modules/${name}/module.json`,
+            `Circular module dependency: ${cycle.join(" -> ")}. Break the cycle (for example with an event) instead of declaring it.`,
+          ),
+        );
         return;
       }
       state.set(name, "visiting");
@@ -112,7 +140,7 @@ function checkNames(root: string, findings: Finding[]): void {
   const groups = ["apps", "packages", "tools"];
   for (const group of groups) {
     for (const file of listFiles(root, group)) {
-      if (!file.endsWith(".ts")) continue;
+      if (!/\.tsx?$/.test(file)) continue;
       const name = file.split("/").pop() ?? file;
       if (!FILE_NAME.test(name)) {
         findings.push(finding("file-name", file, `File names are lowercase kebab-case ("${name}").`));

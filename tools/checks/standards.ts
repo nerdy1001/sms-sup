@@ -7,11 +7,11 @@ import { finding, type CheckResult, type Finding, type Suppression } from "../li
 import { applySuppressions } from "../lib/suppressions.ts";
 import { rules } from "../rules.config.ts";
 
-const TEXT_EXTENSIONS = [".ts", ".json", ".md", ".yml", ".yaml", ".sql", ".mjs", ".cjs", ".js", ".sh"];
+const TEXT_EXTENSIONS = [".ts", ".tsx", ".css", ".html", ".json", ".md", ".yml", ".yaml", ".sql", ".mjs", ".cjs", ".js", ".sh"];
 const TEXT_DOTFILES = [".editorconfig", ".gitignore", ".gitattributes", ".npmrc", ".nvmrc", ".dockerignore", "Dockerfile", "Caddyfile"];
 
 function inStandardsScope(file: string): boolean {
-  return file.endsWith(".ts") && !file.endsWith(".d.ts") && /^(apps\/[^/]+\/src|packages\/[^/]+\/src|tools)\//.test(file);
+  return /\.tsx?$/.test(file) && !file.endsWith(".d.ts") && /^(apps\/[^/]+\/src|packages\/[^/]+\/src|tools)\//.test(file);
 }
 
 function isProductCode(where: Where): boolean {
@@ -72,22 +72,49 @@ function checkSourceFile(file: string, text: string): CheckResult {
     if (product) {
       if (ts.isPropertyAccessExpression(node)) {
         if (isIdentifier(node.expression, "console")) {
-          report("no-console", node, "Do not use console in application code. Use the logger of the kernel (it keeps personal data out of logs).");
+          report(
+            "no-console",
+            node,
+            "Do not use console in application code. Use the logger of the kernel (it keeps personal data out of logs).",
+          );
         }
         if (isIdentifier(node.expression, "Math") && node.name.text === "random") {
-          report("no-math-random", node, "Math.random is predictable. Use randomInt or randomBytes from node:crypto; if this is certainly not security related, suppress with a reason.");
+          report(
+            "no-math-random",
+            node,
+            "Math.random is predictable. Use randomInt or randomBytes from node:crypto; if this is certainly not security related, suppress with a reason.",
+          );
         }
         if (isIdentifier(node.expression, "process") && node.name.text === "env" && !matchesAny(file, rules.processEnvAllowedPaths)) {
-          report("no-process-env", node, "Read configuration only in kernel/config (validated once at start-up), never from process.env directly.");
+          report(
+            "no-process-env",
+            node,
+            "Read configuration only in kernel/config (validated once at start-up), never from process.env directly.",
+          );
         }
         if (node.name.text === "toFixed" || (isIdentifier(node.expression, "Number") && node.name.text === "parseFloat")) {
-          report("no-float-money", node, "Do not format or parse decimal numbers. Money is a whole number of the local currency; use the money helpers of the kernel.");
+          report(
+            "no-float-money",
+            node,
+            "Do not format or parse decimal numbers. Money is a whole number of the local currency; use the money helpers of the kernel.",
+          );
         }
-        if (apiApp && !egressAllowed && isIdentifier(node.expression, "globalThis") && (rules.egress.globals as readonly string[]).includes(node.name.text)) {
+        if (
+          apiApp &&
+          !egressAllowed &&
+          isIdentifier(node.expression, "globalThis") &&
+          (rules.egress.globals as readonly string[]).includes(node.name.text)
+        ) {
           report("network-egress", node, `"${node.name.text}" opens network connections and is not allowed here (see docs/boundaries.md).`);
         }
       }
-      if (ts.isElementAccessExpression(node) && isIdentifier(node.expression, "process") && ts.isStringLiteral(node.argumentExpression) && node.argumentExpression.text === "env" && !matchesAny(file, rules.processEnvAllowedPaths)) {
+      if (
+        ts.isElementAccessExpression(node) &&
+        isIdentifier(node.expression, "process") &&
+        ts.isStringLiteral(node.argumentExpression) &&
+        node.argumentExpression.text === "env" &&
+        !matchesAny(file, rules.processEnvAllowedPaths)
+      ) {
         report("no-process-env", node, "Read configuration only in kernel/config, never from process.env directly.");
       }
       if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
@@ -100,7 +127,11 @@ function checkSourceFile(file: string, text: string): CheckResult {
           if (name === "parseFloat") {
             report("no-float-money", node, "Do not parse decimal numbers. Money is a whole number of the local currency.");
           }
-          if ((name === "setTimeout" || name === "setInterval") && node.arguments?.[0] !== undefined && ts.isStringLiteralLike(node.arguments[0])) {
+          if (
+            (name === "setTimeout" || name === "setInterval") &&
+            node.arguments?.[0] !== undefined &&
+            ts.isStringLiteralLike(node.arguments[0])
+          ) {
             report("no-eval", node, `${name} with a string runs text as code. Pass a function.`);
           }
           if (apiApp && !egressAllowed && (rules.egress.globals as readonly string[]).includes(name)) {
@@ -121,11 +152,20 @@ function checkSourceFile(file: string, text: string): CheckResult {
 function checkTypeScriptDirectives(file: string, comments: readonly SourceComment[], found: Finding[]): void {
   for (const comment of comments) {
     if (/@ts-(ignore|nocheck)\b/.test(comment.text)) {
-      found.push(finding("no-ts-ignore", file, "Do not silence the type checker. Fix the type, or use an expect-error directive with a written reason.", comment.line));
+      found.push(
+        finding(
+          "no-ts-ignore",
+          file,
+          "Do not silence the type checker. Fix the type, or use an expect-error directive with a written reason.",
+          comment.line,
+        ),
+      );
     }
     const expectError = /@ts-expect-error([^\n*]*)/.exec(comment.text);
     if (expectError !== null && (expectError[1] ?? "").trim().length < 10) {
-      found.push(finding("no-ts-ignore", file, "An expect-error directive needs a reason of at least 10 characters after it.", comment.line));
+      found.push(
+        finding("no-ts-ignore", file, "An expect-error directive needs a reason of at least 10 characters after it.", comment.line),
+      );
     }
   }
 }

@@ -22,11 +22,72 @@ export interface SyntheticScholar {
 
 export const DEFAULT_SEED = 20261027;
 
-const GIVEN_F = ["Aline", "Brenda", "Carine", "Doris", "Estelle", "Flore", "Grace", "Hortense", "Ines", "Juliette", "Karine", "Laure", "Mireille", "Nadine", "Olive", "Prisca"];
-const GIVEN_M = ["Arnaud", "Blaise", "Cedric", "Daniel", "Emmanuel", "Franck", "Gaston", "Herve", "Ivan", "Jules", "Kevin", "Landry", "Martial", "Nelson", "Olivier", "Patrick"];
-const FAMILY = ["Abena", "Bekolo", "Chia", "Dongmo", "Essomba", "Fotso", "Gwet", "Hakeem", "Itoe", "Jioke", "Kamga", "Lekeufack", "Mbarga", "Ndifor", "Onana", "Pouth", "Qwesi", "Tchoua", "Ubah", "Vondou"];
+const GIVEN_F = [
+  "Aline",
+  "Brenda",
+  "Carine",
+  "Doris",
+  "Estelle",
+  "Flore",
+  "Grace",
+  "Hortense",
+  "Ines",
+  "Juliette",
+  "Karine",
+  "Laure",
+  "Mireille",
+  "Nadine",
+  "Olive",
+  "Prisca",
+];
+const GIVEN_M = [
+  "Arnaud",
+  "Blaise",
+  "Cedric",
+  "Daniel",
+  "Emmanuel",
+  "Franck",
+  "Gaston",
+  "Herve",
+  "Ivan",
+  "Jules",
+  "Kevin",
+  "Landry",
+  "Martial",
+  "Nelson",
+  "Olivier",
+  "Patrick",
+];
+const FAMILY = [
+  "Abena",
+  "Bekolo",
+  "Chia",
+  "Dongmo",
+  "Essomba",
+  "Fotso",
+  "Gwet",
+  "Hakeem",
+  "Itoe",
+  "Jioke",
+  "Kamga",
+  "Lekeufack",
+  "Mbarga",
+  "Ndifor",
+  "Onana",
+  "Pouth",
+  "Qwesi",
+  "Tchoua",
+  "Ubah",
+  "Vondou",
+];
 const COUNTRIES = ["Country A", "Country B", "Country C", "Country D", "Country E"];
-const INSTITUTIONS = ["Test University One", "Test University Two", "Test Institute of Technology", "Test School of Medicine", "Test Business School"];
+const INSTITUTIONS = [
+  "Test University One",
+  "Test University Two",
+  "Test Institute of Technology",
+  "Test School of Medicine",
+  "Test Business School",
+];
 const LEVELS: readonly SyntheticScholar["level"][] = ["licence", "master", "doctorate"];
 
 /** A small, fast generator (mulberry32). Not for security: only for repeatable test data. */

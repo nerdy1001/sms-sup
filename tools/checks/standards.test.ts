@@ -16,10 +16,15 @@ function run(files: Record<string, string>) {
   return checkStandards(project.root);
 }
 const errorRules = (files: Record<string, string>): string[] =>
-  run(files).findings.filter((item) => item.severity === "error").map((item) => item.rule);
+  run(files)
+    .findings.filter((item) => item.severity === "error")
+    .map((item) => item.rule);
 
 test("clean code passes", () => {
-  assert.deepEqual(errorRules({ [KERNEL]: 'export const a = 1;\nexport function f(value: unknown): string {\n  return String(value);\n}\n' }), []);
+  assert.deepEqual(
+    errorRules({ [KERNEL]: "export const a = 1;\nexport function f(value: unknown): string {\n  return String(value);\n}\n" }),
+    [],
+  );
 });
 
 const violations: { name: string; rule: string; code: string; file?: string }[] = [
@@ -38,7 +43,12 @@ const violations: { name: string; rule: string; code: string; file?: string }[] 
   { name: "parseFloat", rule: "no-float-money", code: 'export const v = parseFloat("1.5");\n' },
   { name: "Number.parseFloat", rule: "no-float-money", code: 'export const v = Number.parseFloat("1.5");\n' },
   { name: "Math.random", rule: "no-math-random", code: "export const v = Math.random();\n" },
-  { name: "fetch in a business module", rule: "network-egress", code: 'await fetch("https://x");\n', file: "apps/core-api/src/modules/registry/internal/application/a.ts" },
+  {
+    name: "fetch in a business module",
+    rule: "network-egress",
+    code: 'await fetch("https://x");\n',
+    file: "apps/core-api/src/modules/registry/internal/application/a.ts",
+  },
   { name: "globalThis.fetch", rule: "network-egress", code: 'await globalThis.fetch("https://x");\n' },
   { name: "WebSocket", rule: "network-egress", code: 'export const w = new WebSocket("wss://x");\n' },
   { name: "ts-ignore comment", rule: "no-ts-ignore", code: "// @ts-ignore\nexport const a: number = 'x';\n" },
@@ -57,7 +67,13 @@ describe("violations are reported", () => {
 
 describe("allowed uses", () => {
   test("configuration may read the environment, in its own folder and in main.ts", () => {
-    assert.deepEqual(errorRules({ "apps/core-api/src/kernel/config/env.ts": "export const v = process.env.X;\n", "apps/core-api/src/main.ts": "export const w = process.env.Y;\n" }), []);
+    assert.deepEqual(
+      errorRules({
+        "apps/core-api/src/kernel/config/env.ts": "export const v = process.env.X;\n",
+        "apps/core-api/src/main.ts": "export const w = process.env.Y;\n",
+      }),
+      [],
+    );
   });
 
   test("network globals are allowed in the places that may use the network", () => {
@@ -72,11 +88,22 @@ describe("allowed uses", () => {
   });
 
   test("an expect-error directive with a reason is accepted", () => {
-    assert.deepEqual(errorRules({ [KERNEL]: "// @ts-expect-error the library types are wrong for this call, see issue 12\nexport const a: number = 'x';\n" }), []);
+    assert.deepEqual(
+      errorRules({
+        [KERNEL]: "// @ts-expect-error the library types are wrong for this call, see issue 12\nexport const a: number = 'x';\n",
+      }),
+      [],
+    );
   });
 
   test("tests and tools may use console, process.env and toFixed", () => {
-    assert.deepEqual(errorRules({ "apps/core-api/src/kernel/x.test.ts": 'console.log(process.env.X, (1).toFixed(1));\n', "tools/script.ts": 'console.log("hello");\n' }), []);
+    assert.deepEqual(
+      errorRules({
+        "apps/core-api/src/kernel/x.test.ts": "console.log(process.env.X, (1).toFixed(1));\n",
+        "tools/script.ts": 'console.log("hello");\n',
+      }),
+      [],
+    );
   });
 
   test("tests are still held to the type rules", () => {
@@ -84,13 +111,18 @@ describe("allowed uses", () => {
   });
 
   test("words in strings or comments are not mistaken for code", () => {
-    assert.deepEqual(errorRules({ [KERNEL]: '// do not call console.log or eval( here\nexport const note = "use Math.random() never; any is banned";\n' }), []);
+    assert.deepEqual(
+      errorRules({ [KERNEL]: '// do not call console.log or eval( here\nexport const note = "use Math.random() never; any is banned";\n' }),
+      [],
+    );
   });
 });
 
 describe("suppressions", () => {
   test("a suppression with a reason silences one rule and stays visible in the report", () => {
-    const result = run({ [KERNEL]: "// standards-ignore: no-any -- the vendor library exposes an untyped callback\nexport const a: any = 1;\n" });
+    const result = run({
+      [KERNEL]: "// standards-ignore: no-any -- the vendor library exposes an untyped callback\nexport const a: any = 1;\n",
+    });
     assert.deepEqual(result.findings, []);
     assert.equal(result.suppressions.length, 1);
     assert.equal(result.suppressions[0]?.rule, "no-any");
@@ -108,18 +140,25 @@ describe("suppressions", () => {
 
   test("a suppression that matches nothing is a warning", () => {
     const result = run({ [KERNEL]: "// standards-ignore: no-any -- nothing to silence on the next line\nexport const a = 1;\n" });
-    assert.deepEqual(result.findings.map((item) => [item.rule, item.severity]), [["unused-suppression", "warning"]]);
+    assert.deepEqual(
+      result.findings.map((item) => [item.rule, item.severity]),
+      [["unused-suppression", "warning"]],
+    );
   });
 
   test("a suppression for another rule does not silence the finding", () => {
-    const rules = errorRules({ [KERNEL]: "// standards-ignore: no-console -- wrong rule named here on purpose\nexport const a: any = 1;\n" });
+    const rules = errorRules({
+      [KERNEL]: "// standards-ignore: no-console -- wrong rule named here on purpose\nexport const a: any = 1;\n",
+    });
     assert.ok(rules.includes("no-any"));
   });
 });
 
 describe("whitespace", () => {
   const whitespace = (name: string, content: string): string[] =>
-    run({ [name]: content }).findings.filter((item) => item.rule === "whitespace").map((item) => item.message);
+    run({ [name]: content })
+      .findings.filter((item) => item.rule === "whitespace")
+      .map((item) => item.message);
 
   test("clean text files pass", () => {
     assert.deepEqual(whitespace("docs/a.md", "# Title\n\nText.\n"), []);
@@ -141,5 +180,30 @@ describe("whitespace", () => {
   });
   test("the lock file is ignored", () => {
     assert.deepEqual(whitespace("package-lock.json", "{}"), []);
+  });
+});
+
+describe("web applications (files with JSX)", () => {
+  test("the coding rules apply to components too", () => {
+    assert.deepEqual(errorRules({ "apps/staff-web/src/page.tsx": "export const Page = (p: { v: any }) => <p>{p.v}</p>;\n" }), ["no-any"]);
+    assert.deepEqual(errorRules({ "apps/staff-web/src/page.tsx": "export default function Page() {\n  return <p>x</p>;\n}\n" }), [
+      "no-default-export",
+    ]);
+    assert.deepEqual(errorRules({ "apps/staff-web/src/page.tsx": 'export const Page = () => { console.log("x"); return <p>x</p>; };\n' }), [
+      "no-console",
+    ]);
+  });
+  test("a clean component passes, and test files may log", () => {
+    assert.deepEqual(errorRules({ "apps/staff-web/src/page.tsx": "export const Page = () => <p>x</p>;\n" }), []);
+    assert.deepEqual(
+      errorRules({ "apps/staff-web/src/page.spec.tsx": 'export const t = () => { console.log("x"); return <p>x</p>; };\n' }),
+      [],
+    );
+  });
+  test("whitespace rules apply to style sheets and pages", () => {
+    const rules = (files: Record<string, string>): string[] => run(files).findings.map((item) => item.rule);
+    assert.deepEqual(rules({ "apps/staff-web/src/styles.css": "body {} \n" }), ["whitespace"]);
+    const page = rules({ "apps/staff-web/index.html": "<p>x</p>\t\n" });
+    assert.ok(page.length > 0 && page.every((rule) => rule === "whitespace"));
   });
 });

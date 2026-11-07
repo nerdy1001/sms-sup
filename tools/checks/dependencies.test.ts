@@ -12,8 +12,15 @@ afterEach(() => {
 const NPMRC = "save-exact=true\nignore-scripts=true\nengine-strict=true\n";
 const TODAY = new Date("2026-10-26T12:00:00Z");
 
-const lock = (packages: Record<string, unknown>): string => FIXTURE_JSON({ lockfileVersion: 3, packages: { "": { name: "fixture" }, ...packages } });
-const GOOD_LOCK = lock({ "node_modules/typescript": { version: "6.0.3", resolved: "https://registry.npmjs.org/typescript/-/typescript-6.0.3.tgz", integrity: "sha512-abc" } });
+const lock = (packages: Record<string, unknown>): string =>
+  FIXTURE_JSON({ lockfileVersion: 3, packages: { "": { name: "fixture" }, ...packages } });
+const GOOD_LOCK = lock({
+  "node_modules/typescript": {
+    version: "6.0.3",
+    resolved: "https://registry.npmjs.org/typescript/-/typescript-6.0.3.tgz",
+    integrity: "sha512-abc",
+  },
+});
 
 function run(files: Record<string, string>) {
   project = createProject({ ".npmrc": NPMRC, "package-lock.json": GOOD_LOCK, ...files });
@@ -43,7 +50,14 @@ describe("manifests", () => {
   });
 
   test("a git, URL, file or alias source is reported", () => {
-    for (const spec of ["git+https://github.com/a/b.git", "github:a/b", "a/b", "https://example.com/x.tgz", "file:../x", "npm:other@1.0.0"]) {
+    for (const spec of [
+      "git+https://github.com/a/b.git",
+      "github:a/b",
+      "a/b",
+      "https://example.com/x.tgz",
+      "file:../x",
+      "npm:other@1.0.0",
+    ]) {
       assert.deepEqual(run(manifest({ zod: spec })), ["error:dependency-source"], spec);
     }
   });
@@ -57,7 +71,10 @@ describe(".npmrc", () => {
   test("a missing file is reported", () => {
     project = createProject();
     project.remove(".npmrc");
-    assert.deepEqual(checkDependencies(project.root, TODAY).findings.map((item) => item.rule), ["npmrc-policy"]);
+    assert.deepEqual(
+      checkDependencies(project.root, TODAY).findings.map((item) => item.rule),
+      ["npmrc-policy"],
+    );
   });
 
   test("each missing setting is reported", () => {
@@ -69,11 +86,16 @@ describe("lock file", () => {
   test("a missing lock file is a warning", () => {
     project = createProject();
     project.remove("package-lock.json");
-    assert.deepEqual(checkDependencies(project.root, TODAY).findings.map((item) => `${item.severity}:${item.rule}`), ["warning:lockfile-missing"]);
+    assert.deepEqual(
+      checkDependencies(project.root, TODAY).findings.map((item) => `${item.severity}:${item.rule}`),
+      ["warning:lockfile-missing"],
+    );
   });
 
   test("a package fetched from elsewhere is reported", () => {
-    const found = run({ "package-lock.json": lock({ "node_modules/x": { resolved: "https://evil.example.com/x.tgz", integrity: "sha512-abc" } }) });
+    const found = run({
+      "package-lock.json": lock({ "node_modules/x": { resolved: "https://evil.example.com/x.tgz", integrity: "sha512-abc" } }),
+    });
     assert.deepEqual(found, ["error:lockfile-source"]);
   });
 
@@ -83,7 +105,10 @@ describe("lock file", () => {
   });
 
   test("workspace links and the root are skipped", () => {
-    assert.deepEqual(run({ "package-lock.json": lock({ "node_modules/@minesup/contracts": { resolved: "packages/contracts", link: true } }) }), []);
+    assert.deepEqual(
+      run({ "package-lock.json": lock({ "node_modules/@minesup/contracts": { resolved: "packages/contracts", link: true } }) }),
+      [],
+    );
   });
 
   test("a lock file in the wrong format is reported", () => {
@@ -92,7 +117,8 @@ describe("lock file", () => {
 
   test("no more than five findings per rule", () => {
     const many: Record<string, unknown> = {};
-    for (let index = 0; index < 20; index += 1) many[`node_modules/p${index}`] = { resolved: "https://evil.example.com/p.tgz", integrity: "sha512-abc" };
+    for (let index = 0; index < 20; index += 1)
+      many[`node_modules/p${index}`] = { resolved: "https://evil.example.com/p.tgz", integrity: "sha512-abc" };
     assert.equal(run({ "package-lock.json": lock(many) }).length, 5);
   });
 });

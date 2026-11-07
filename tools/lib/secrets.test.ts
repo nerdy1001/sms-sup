@@ -30,7 +30,10 @@ describe("detectors", () => {
   ];
   for (const [name, line, rule] of cases) {
     test(`finds ${name}`, () => {
-      assert.deepEqual(scanLine(line).map((hit) => hit.rule), [rule]);
+      assert.deepEqual(
+        scanLine(line).map((hit) => hit.rule),
+        [rule],
+      );
     });
   }
 
@@ -40,7 +43,7 @@ describe("detectors", () => {
     "postgres://app:${DB_PASSWORD}@db/sms",
     "postgres://app:<password>@db/sms",
     'const password = "changeme-please-123";',
-    'const token = process.env.TOKEN_VALUE_1;',
+    "const token = process.env.TOKEN_VALUE_1;",
     'const secretName = "scholar-registry-export";',
     'const authHeader = "Authorization";',
     'password: "${PASSWORD_FROM_VAULT}"',
@@ -70,7 +73,10 @@ describe("scanText and allow markers", () => {
   const line = `const key = "${AWS}";`;
 
   test("reports the line number", () => {
-    assert.deepEqual(scanText(`a\nb\n${line}\n`).hits.map((item) => item.line), [3]);
+    assert.deepEqual(
+      scanText(`a\nb\n${line}\n`).hits.map((item) => item.line),
+      [3],
+    );
   });
 
   test("a marker with a rule and a reason on the same line allows the hit", () => {
@@ -108,8 +114,14 @@ describe("history", () => {
 
   test("a secret that was removed again is still found where it was added", () => {
     const added = `${head}@@ -0,0 +1 @@\n+const key = "${AWS}";\n`;
-    const removed = "commit fedcba9876543210fedcba9876543210fedcba98\n\ndiff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +0,0 @@\n-const key = \"" + AWS + "\";\n";
-    assert.deepEqual(scanDiff(`${removed}\n${added}`).map((item) => item.commit), ["0123456"]);
+    const removed =
+      'commit fedcba9876543210fedcba9876543210fedcba98\n\ndiff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +0,0 @@\n-const key = "' +
+      AWS +
+      '";\n';
+    assert.deepEqual(
+      scanDiff(`${removed}\n${added}`).map((item) => item.commit),
+      ["0123456"],
+    );
   });
 
   test("removed and context lines are not reported, headers are not content", () => {

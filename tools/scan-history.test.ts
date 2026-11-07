@@ -21,7 +21,10 @@ describe("findingsFromHistory", () => {
 
   test("a secret file name that was ever added is reported once", () => {
     const found = findingsFromHistory("", [".env", ".env", "src/a.ts"], new Set());
-    assert.deepEqual(found.map((item) => [item.rule, item.file]), [["secret-file", ".env"]]);
+    assert.deepEqual(
+      found.map((item) => [item.rule, item.file]),
+      [["secret-file", ".env"]],
+    );
   });
 
   test("a warning-level file name is not reported from history", () => {

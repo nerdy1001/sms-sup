@@ -5,8 +5,8 @@
  * person's identity over to the next request.
  *
  * Use it with one connection that you own for the whole request, not with a pool that may hand a
- * different connection to each call. The database driver comes later (task FN-05); this file only
- * needs something that can run a query.
+ * different connection to each call. `database.ts` does that (it borrows one connection, calls `runAs`
+ * on it and gives it back); this file only needs something that can run a query.
  */
 
 export interface SqlExecutor {

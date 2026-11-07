@@ -1,9 +1,15 @@
 .git
 .github
-node_modules
+**/node_modules
+**/dist
 docs
 infra
 security
-tools
+tools/*
+!tools/db
+!tools/lib
+tools/lib/*
+!tools/lib/files.ts
+tools/db/test-database.ts
 *.md
 **/*.test.ts

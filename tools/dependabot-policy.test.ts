@@ -44,7 +44,13 @@ describe("evaluateDependabotPr", () => {
   });
 
   test("workspace manifests and workflow files count as dependency files", () => {
-    assert.equal(evaluateDependabotPr({ messages: message("patch"), files: ["apps/core-api/package.json", "packages/contracts/package.json", ".github/workflows/ci.yml"] }).merge, true);
+    assert.equal(
+      evaluateDependabotPr({
+        messages: message("patch"),
+        files: ["apps/core-api/package.json", "packages/contracts/package.json", ".github/workflows/ci.yml"],
+      }).merge,
+      true,
+    );
   });
 
   test("an empty list of files does not merge", () => {

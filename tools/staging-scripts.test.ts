@@ -1,9 +1,33 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, test } from "node:test";
+
+/**
+ * The scripts under test run on a Linux server, so the tests need a real bash and the usual Linux
+ * tools (flock, tar, ls). On Windows, and on a Mac without flock, they are skipped with a reason; they
+ * run on GitHub's Linux machines, where they cannot be skipped by accident.
+ */
+function missingLinuxTools(): string | false {
+  if (process.platform === "win32") return "needs Linux (bash, flock, tar): skipped on Windows, runs on GitHub";
+  const probe = spawnSync("bash", ["-c", "command -v flock tar ls >/dev/null && echo ok"], { encoding: "utf8" });
+  const ready = probe.error === undefined && typeof probe.stdout === "string" && probe.stdout.trim() === "ok";
+  return ready ? false : "needs bash, flock, tar and ls on the PATH: skipped on this computer, runs on GitHub";
+}
+const SKIP = missingLinuxTools();
 
 /**
  * Runs the real scripts of infra/staging/bin against a fake docker and a fake tailscale that only
@@ -21,7 +45,8 @@ echo "docker[$APP_VERSION] $*" >> "$FAKE_LOG"
 case "$*" in
   *"config --images"*) printf 'caddy:2.10.0-alpine\\nminesup/core-api:%s\\n' "$APP_VERSION" ;;
   "manifest inspect "*) [ "$3" = "\${FAKE_MISSING_IMAGE:-}" ] && exit 1; exit 0 ;;
-  *" up "*) [ -n "\${FAKE_FAIL_VERSION:-}" ] && [ "$APP_VERSION" = "$FAKE_FAIL_VERSION" ] && exit 1; exit 0 ;;
+  *" up "*"--remove-orphans"*) [ -n "\${FAKE_FAIL_VERSION:-}" ] && [ "$APP_VERSION" = "$FAKE_FAIL_VERSION" ] && exit 1; exit 0 ;;
+  *" run "*) [ -n "\${FAKE_FAIL_MIGRATE:-}" ] && [ "$APP_VERSION" = "$FAKE_FAIL_MIGRATE" ] && exit 1; exit 0 ;;
   *"exec -T core-api wget"*) printf '{"status":"ok","version":"%s"}' "\${FAKE_SERVED:-$APP_VERSION}" ;;
   "ps -q"*) echo "container1" ;;
   *"pg_dump"*) echo "DUMPDATA" ;;
@@ -44,6 +69,7 @@ beforeEach(() => {
   backups = join(dir, "backups");
   log = join(dir, "docker.log");
   mkdirSync(join(root, "releases"), { recursive: true });
+  symlinkSync(BIN, join(root, "bin"));
   writeFileSync(join(root, ".env"), "STAGING_HOSTNAME=x.ts.net\n");
   writeFileSync(log, "");
   const fakes = join(dir, "fakes");
@@ -70,19 +96,25 @@ function run(script: string, args: string[], options: { command?: string; input?
   });
 }
 
-function makeUpload(files: Record<string, string> = { "compose.yaml": "services: {}\n", Caddyfile: "{}\n", "image.tar.gz": "IMAGE" }, extra?: (folder: string) => void): Buffer {
+function makeUpload(
+  files: Record<string, string> = { "compose.yaml": "services: {}\n", Caddyfile: "{}\n", "image.tar.gz": "IMAGE" },
+  extra?: (folder: string) => void,
+): Buffer {
   const folder = mkdtempSync(join(dir, "upload-"));
   for (const [name, content] of Object.entries(files)) writeFileSync(join(folder, name), content);
   extra?.(folder);
-  const names = spawnSync("ls", ["-A", folder], { encoding: "utf8" }).stdout.split("\n").filter((name) => name !== "");
+  const names = spawnSync("ls", ["-A", folder], { encoding: "utf8" })
+    .stdout.split("\n")
+    .filter((name) => name !== "");
   const packed = spawnSync("tar", ["-C", folder, "-cf", "-", ...names], { maxBuffer: 1 << 20 });
   return packed.stdout;
 }
-const deploy = (sha: string, upload = makeUpload(), env: Record<string, string> = {}) => run("staging-deploy.sh", [], { command: `deploy ${sha}`, input: upload, env });
+const deploy = (sha: string, upload = makeUpload(), env: Record<string, string> = {}) =>
+  run("staging-deploy.sh", [], { command: `deploy ${sha}`, input: upload, env });
 const state = (name: string): string => (existsSync(join(root, name)) ? readFileSync(join(root, name), "utf8").trim() : "");
 const logText = (): string => readFileSync(log, "utf8");
 
-describe("staging-deploy: what the deploy key may do", () => {
+describe("staging-deploy: what the deploy key may do", { skip: SKIP }, () => {
   test("an unknown command is refused", () => {
     const result = run("staging-deploy.sh", [], { command: "bash -c 'id'" });
     assert.equal(result.status, 1);
@@ -134,7 +166,7 @@ describe("staging-deploy: what the deploy key may do", () => {
   });
 });
 
-describe("staging-deploy: deploying", () => {
+describe("staging-deploy: deploying", { skip: SKIP }, () => {
   test("a first deployment loads the image, checks the registries, starts the services and records the version", () => {
     const result = deploy(SHA1);
     assert.equal(result.status, 0, result.stderr);
@@ -172,7 +204,10 @@ describe("staging-deploy: deploying", () => {
     assert.equal(result.status, 1);
     assert.match(result.stderr, /rolled back/);
     assert.equal(state("current"), SHA1);
-    assert.match(logText(), new RegExp(`docker\\[${SHA1}\\] compose .* up .*\\n[^]*docker\\[${SHA2}\\] compose .* up .*\\n[^]*docker\\[${SHA1}\\] compose .* up`));
+    assert.match(
+      logText(),
+      new RegExp(`docker\\[${SHA1}\\] compose .* up .*\\n[^]*docker\\[${SHA2}\\] compose .* up .*\\n[^]*docker\\[${SHA1}\\] compose .* up`),
+    );
   });
 
   test("a version that starts but is not the one answering counts as a failure", () => {
@@ -196,6 +231,68 @@ describe("staging-deploy: deploying", () => {
     assert.equal(state("current"), "");
   });
 
+  test("the database is migrated after it is up and before the new version starts", () => {
+    const result = deploy(SHA1);
+    assert.equal(result.status, 0, result.stderr);
+    const text = logText();
+    const database = text.indexOf("--wait-timeout 120 postgres");
+    const migration = text.indexOf("run --rm --no-deps migrate");
+    const application = text.indexOf("up -d --remove-orphans");
+    assert.ok(database !== -1 && migration !== -1 && application !== -1, text);
+    assert.ok(database < migration && migration < application, text);
+  });
+
+  test("the first deployment takes no backup, because there is no data yet", () => {
+    assert.equal(deploy(SHA1).status, 0);
+    assert.ok(!logText().includes("pg_dump"));
+  });
+
+  test("a later deployment takes a backup before it changes the structure", () => {
+    assert.equal(deploy(SHA1).status, 0);
+    assert.equal(deploy(SHA2).status, 0);
+    const text = logText();
+    const second = text.indexOf(`docker[${SHA2}] compose`);
+    const backup = text.indexOf("pg_dump", second);
+    const migration = text.indexOf("run --rm --no-deps migrate", second);
+    assert.ok(backup !== -1 && backup < migration, text);
+  });
+
+  test("a failed migration stops the deployment, starts nothing and leaves the running version alone", () => {
+    assert.equal(deploy(SHA1).status, 0);
+    const before = logText().length;
+    const result = deploy(SHA2, makeUpload(), { FAKE_FAIL_MIGRATE: SHA2 });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /database migration failed/);
+    assert.equal(state("current"), SHA1);
+    const added = logText().slice(before);
+    assert.ok(!added.includes("--remove-orphans"), added);
+    assert.ok(!added.includes(`docker[${SHA1}]`), "the running version must not be touched");
+  });
+
+  test("a failed migration on the first deployment leaves no current version", () => {
+    assert.equal(deploy(SHA1, makeUpload(), { FAKE_FAIL_MIGRATE: SHA1 }).status, 1);
+    assert.equal(state("current"), "");
+  });
+
+  test("going back after a version that does not start does not migrate again", () => {
+    assert.equal(deploy(SHA1).status, 0);
+    assert.equal(deploy(SHA2, makeUpload(), { FAKE_FAIL_VERSION: SHA2 }).status, 1);
+    assert.equal(
+      logText()
+        .split("\n")
+        .filter((line) => line.includes("run --rm --no-deps migrate")).length,
+      2,
+      "one migration for each deployment, none for the way back",
+    );
+  });
+
+  test("an image that does not exist is found before the database is touched", () => {
+    const result = deploy(SHA1, makeUpload(), { FAKE_MISSING_IMAGE: "caddy:2.10.0-alpine" });
+    assert.equal(result.status, 1);
+    assert.ok(!logText().includes(" run "));
+    assert.ok(!logText().includes("postgres"));
+  });
+
   test("a server without a Tailscale address stops the deployment", () => {
     const result = deploy(SHA1, makeUpload(), { FAKE_TAILSCALE_IP: "" });
     assert.equal(result.status, 1);
@@ -210,14 +307,16 @@ describe("staging-deploy: deploying", () => {
       const when = new Date(Date.now() - (versions.length - index) * 60_000);
       utimesSync(join(root, "releases", version), when, when);
     });
-    const kept = spawnSync("ls", [join(root, "releases")], { encoding: "utf8" }).stdout.trim().split("\n");
+    const kept = spawnSync("ls", [join(root, "releases")], { encoding: "utf8" })
+      .stdout.trim()
+      .split("\n");
     assert.equal(kept.length, 5);
     assert.ok(!kept.includes(versions[0] ?? ""));
     assert.ok(kept.includes(versions[6] ?? ""));
   });
 });
 
-describe("staging-deploy: rollback and status", () => {
+describe("staging-deploy: rollback and status", { skip: SKIP }, () => {
   test("rollback goes back to the previous release and swaps them", () => {
     deploy(SHA1);
     deploy(SHA2);
@@ -225,6 +324,21 @@ describe("staging-deploy: rollback and status", () => {
     assert.equal(result.status, 0, result.stderr);
     assert.equal(state("current"), SHA1);
     assert.equal(state("previous"), SHA2);
+  });
+
+  test("a rollback does not run migrations", () => {
+    assert.equal(deploy(SHA1).status, 0);
+    assert.equal(deploy(SHA2).status, 0);
+    const before = logText()
+      .split("\n")
+      .filter((line) => line.includes(" run ")).length;
+    assert.equal(run("staging-deploy.sh", [], { command: "rollback" }).status, 0);
+    assert.equal(
+      logText()
+        .split("\n")
+        .filter((line) => line.includes(" run ")).length,
+      before,
+    );
   });
 
   test("rollback without a previous release is refused", () => {
@@ -259,7 +373,7 @@ describe("staging-deploy: rollback and status", () => {
   });
 });
 
-describe("backup.sh", () => {
+describe("backup.sh", { skip: SKIP }, () => {
   test("writes a dump, readable only by its owner, and removes dumps older than 7 days", () => {
     mkdirSync(backups, { recursive: true });
     const old = join(backups, "sms-20200101T000000Z.dump");
@@ -272,7 +386,9 @@ describe("backup.sh", () => {
     assert.equal(result.status, 0, result.stderr);
     assert.ok(!existsSync(old));
     assert.ok(existsSync(recent));
-    const fresh = spawnSync("ls", [backups], { encoding: "utf8" }).stdout.split("\n").filter((name) => /^sms-\d{8}T\d{6}Z\.dump$/.test(name));
+    const fresh = spawnSync("ls", [backups], { encoding: "utf8" })
+      .stdout.split("\n")
+      .filter((name) => /^sms-\d{8}T\d{6}Z\.dump$/.test(name));
     assert.equal(fresh.length, 1);
     assert.equal(readFileSync(join(backups, fresh[0] ?? ""), "utf8").trim(), "DUMPDATA");
     assert.equal(statSync(join(backups, fresh[0] ?? "")).mode & 0o077, 0);
@@ -280,7 +396,7 @@ describe("backup.sh", () => {
   });
 });
 
-describe("restore.sh", () => {
+describe("restore.sh", { skip: SKIP }, () => {
   test("verify restores the newest backup into a scratch database and deletes it", () => {
     mkdirSync(backups, { recursive: true });
     writeFileSync(join(backups, "sms-1.dump"), "x");
@@ -318,20 +434,26 @@ describe("restore.sh", () => {
   });
 });
 
-describe("init-staging.sh", () => {
+describe("init-staging.sh", { skip: SKIP }, () => {
   test("creates the settings and a database password that nobody else can read from the folder", () => {
     const result = run("init-staging.sh", ["sms-staging.tail1234.ts.net"]);
     assert.equal(result.status, 0, result.stderr);
     assert.equal(readFileSync(join(root, ".env"), "utf8"), "STAGING_HOSTNAME=sms-staging.tail1234.ts.net\n");
-    assert.ok(readFileSync(join(root, "secrets", "postgres_password"), "utf8").length >= 32);
+    const owner = readFileSync(join(root, "secrets", "postgres_password"), "utf8");
+    const application = readFileSync(join(root, "secrets", "app_password"), "utf8");
+    assert.ok(owner.length >= 32 && application.length >= 32);
+    assert.notEqual(owner, application, "the owner and the application must not share a password");
+    assert.equal(statSync(join(root, "secrets", "app_password")).mode & 0o777, 0o444);
     assert.equal(statSync(join(root, "secrets")).mode & 0o077, 0);
   });
 
   test("running it again keeps the same password", () => {
     run("init-staging.sh", ["a.tail1.ts.net"]);
     const first = readFileSync(join(root, "secrets", "postgres_password"), "utf8");
+    const firstApplication = readFileSync(join(root, "secrets", "app_password"), "utf8");
     run("init-staging.sh", ["b.tail1.ts.net"]);
     assert.equal(readFileSync(join(root, "secrets", "postgres_password"), "utf8"), first);
+    assert.equal(readFileSync(join(root, "secrets", "app_password"), "utf8"), firstApplication);
     assert.match(readFileSync(join(root, ".env"), "utf8"), /b\.tail1\.ts\.net/);
   });
 

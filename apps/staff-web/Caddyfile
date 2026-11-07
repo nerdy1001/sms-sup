@@ -1,0 +1,16 @@
+# Serves the built front end inside its own container. Only the reverse proxy reaches it.
+{
+    auto_https off
+    admin off
+    persist_config off
+}
+
+:8080 {
+    root * /srv
+    encode zstd gzip
+    # Pages that are not files (for example /grants) are answered by index.html; the router decides.
+    try_files {path} /index.html
+    file_server
+    header /assets/* Cache-Control "public, max-age=31536000, immutable"
+    header /index.html Cache-Control "no-cache"
+}

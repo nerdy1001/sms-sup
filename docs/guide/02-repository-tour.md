@@ -26,13 +26,14 @@ Two programs. They will be built, tested and deployed separately.
 
 The internal system. Runs only on the Ministry network. Inside, under `src/`:
 
-- `kernel/` is the **toolbox** used by every module: reading configuration, logging, the web server,
-  database helpers, encryption, audit hooks. It holds only a placeholder health service now
-  (`kernel/http/health.ts`, started by `src/main.ts`, so staging has something to deploy),
-  the database folder `kernel/db` (migrations and seeds of the platform schema, and `context.ts`, which tells
-  the database who is asking) and `kernel/seed` (the generator of synthetic scholars); tasks FN-05 to FN-09
-  fill the rest. Rule:
-  modules may use the kernel, the kernel never uses a module.
+- `kernel/` is the **toolbox** used by every module. It holds `config` (reads and checks the settings),
+  `logging` (the logger, which keeps personal data out), `errors` (the one error format), `http` (the web
+  server, the rule that every route declares who may call it, the health routes and the API description),
+  `db` (the connection pool, `context.ts` which tells the database who is asking, and the migrations and
+  seeds of the platform schema) and `seed` (the generator of synthetic data: scholars, schools, years, payments). Encryption and audit hooks
+  arrive with tasks FN-07 and FN-09. Rule: modules may use the kernel, the kernel never uses a module.
+- `main.ts` is the entry point; `routes.ts` is the list where each module adds its routes. The `Dockerfile`
+  builds the image of staging.
 - `modules/` holds the **business features**, one folder each (registry, payments, documents and so on).
   None exists yet. You create each with a command (see [03-modules.md](03-modules.md)).
 
@@ -41,7 +42,12 @@ The internal system. Runs only on the Ministry network. Inside, under `src/`:
 The only part reachable from the internet. Same shape as `core-api` (`kernel/` and `modules/`) and the
 same rules. It must never import anything from `core-api`.
 
-`core-api` also has a `Dockerfile` (how its image is built for staging) and a `.dockerignore`.
+### `apps/staff-web`: the staff front end
+
+A Vite and React application that runs in the browser and calls `core-api` through one address. It is built to
+static files and has its own `Dockerfile` and `Caddyfile`. Guide 9 explains it; `src/` is toured there.
+
+`core-api` also has a `Dockerfile` (how its image is built for staging, installing its libraries from the lock file) and a `.dockerignore`.
 
 Each app folder also has a `package.json`, which declares what that app depends on. This matters:
 a check refuses code that uses a library the app did not declare.
@@ -65,7 +71,7 @@ How to use them is in [the staging runbook](../runbooks/staging.md).
 ## `packages/contracts`
 
 When the staff side pushes a scholar's name to the portal, both sides must agree on what that message
-looks like. That agreement lives here, as plain data descriptions. It is the **only code both zones
+looks like. That agreement lives here, as plain data descriptions (zod schemas: the error codes, the error shape, the health answers). It is the **only code both zones
 may share**, and it may contain no logic, no database and no network code. Think of it as the form
 that both offices fill in the same way.
 
@@ -86,7 +92,9 @@ The robot and its helpers. You will rarely edit it, but you will run it all the 
 | `checks/secrets.ts`, `lib/secrets.ts` | Finds keys, tokens and passwords in files, and files that must never be committed. |
 | `checks/infra.ts` | Ten rules for the files in `infra/` (unpinned images, open ports, powerful containers, passwords in files and so on). |
 | `checks/migrations.ts` | Ten rules for the SQL files: row-level security on every table, numbering, repeatable seeds and more. |
-| `db/` | The database runner: `cli.ts` (the `npm run db:*` commands), `migrate.ts`, `connection.ts` (talks to PostgreSQL through psql), `sql-files.ts`, and the helper that starts a temporary server for the tests. |
+| `db/` | The database runner: `cli.ts` (the `npm run db:*` commands), `migrate.ts`, `connection.ts` (talks to PostgreSQL through the `pg` driver), `sql-files.ts`, and the helper that starts a temporary server for the tests. |
+| `dev.ts`, `api-docs.ts` | `npm run dev` (starts the API for development) and `npm run api:docs` (writes `docs/api/openapi.json`). |
+| `checks/register.ts` | Checks that every library has a row in `docs/dependencies.md`. |
 | `render-cloud-init.ts` | Builds `infra/staging/cloud-init.yaml` from its template and the scripts. |
 | `checks/dependencies.ts` | Checks that dependencies are pinned, come from the npm registry, and match the lock file rules. |
 | `scan-history.ts` | The secret scan over every commit of the history (`npm run scan:secrets`). |
@@ -103,12 +111,14 @@ The robot and its helpers. You will rarely edit it, but you will run it all the 
 | Path | What it is |
 |---|---|
 | `README.md` | Index of the documentation and how it is kept up to date. |
-| `guide/` | This guide: concepts and explanations. |
+| `guide/` | This guide: concepts and explanations, including how Fastify works here. |
 | `progress.md` | The list of tasks finished so far. |
 | `tasks/` | One record per finished task: what was asked, what was built, how to check it. |
 | `boundaries.md` | Every enforced rule with the reason behind it (reference). |
 | `architecture/modules.md` | The planned modules and which may depend on which. |
-| `adr/` | Decision records: why one repository, why no NestJS, why custom checks. |
+| `adr/` | Decision records: why one repository, why no NestJS, why custom checks, why Fastify and zod. |
+| `dependencies.md` | The register of libraries: what each is for, why it was not written by hand, what to do if it is abandoned. |
+| `api/openapi.json` | The generated description of the staff API. Never edit by hand: `npm run api:docs`. |
 | `github-setup.md` | GitHub settings to apply once. |
 | `runbooks/` | Step-by-step instructions for running things: the staging server and the local database. |
 

@@ -19,7 +19,12 @@ const SAFE_HTTP_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "0.0.0.0", "
 
 function inScope(file: string): boolean {
   const where = locate(file);
-  return file.endsWith(".ts") && !file.endsWith(".d.ts") && !where.test && (where.kind === "module" || where.kind === "kernel" || where.kind === "app" || where.kind === "package");
+  return (
+    /\.tsx?$/.test(file) &&
+    !file.endsWith(".d.ts") &&
+    !where.test &&
+    (where.kind === "module" || where.kind === "kernel" || where.kind === "app" || where.kind === "package")
+  );
 }
 
 export function checkSecurity(root: string): CheckResult {
@@ -36,7 +41,9 @@ export function checkSecurity(root: string): CheckResult {
 function isDynamicText(node: ts.Expression): boolean {
   if (ts.isTemplateExpression(node)) return true;
   if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
-    return !(ts.isStringLiteralLike(node.left) && ts.isStringLiteralLike(node.right)) || isDynamicText(node.left) || isDynamicText(node.right);
+    return (
+      !(ts.isStringLiteralLike(node.left) && ts.isStringLiteralLike(node.right)) || isDynamicText(node.left) || isDynamicText(node.right)
+    );
   }
   return false;
 }
@@ -62,7 +69,11 @@ function checkSource(file: string, text: string): CheckResult {
       const name = ts.isPropertyAccessExpression(callee) ? callee.name.text : ts.isIdentifier(callee) ? callee.text : "";
       const first = node.arguments[0];
       if (ts.isPropertyAccessExpression(callee) && SQL_METHODS.has(name) && first !== undefined && isDynamicText(first)) {
-        report("sql-interpolation", node, `The query text passed to "${name}" is built from values. Write the text once and pass the values as parameters ($1, $2).`);
+        report(
+          "sql-interpolation",
+          node,
+          `The query text passed to "${name}" is built from values. Write the text once and pass the values as parameters ($1, $2).`,
+        );
       }
       if (name === "createHash" && WEAK_HASHES.has((stringValue(first) ?? "").toLowerCase())) {
         report("weak-hash", node, "MD5 and SHA-1 are broken for security purposes. Use SHA-256 or better, or argon2 for passwords.");
@@ -71,7 +82,11 @@ function checkSource(file: string, text: string): CheckResult {
         report("weak-hash", node, "MD4 and MD5 are broken. Use SHA-256 or better.");
       }
       if (name === "createCipher" || name === "createDecipher") {
-        report("weak-cipher", node, `${name} derives its key badly and is removed from Node. Use ${name}iv with a random iv and an authenticated mode such as aes-256-gcm.`);
+        report(
+          "weak-cipher",
+          node,
+          `${name} derives its key badly and is removed from Node. Use ${name}iv with a random iv and an authenticated mode such as aes-256-gcm.`,
+        );
       }
       if ((name === "createCipheriv" || name === "createDecipheriv") && WEAK_CIPHER.test(stringValue(first) ?? "")) {
         report("weak-cipher", node, "This cipher or mode is weak (ECB, DES, RC2, RC4, Blowfish). Use aes-256-gcm.");
@@ -80,7 +95,11 @@ function checkSource(file: string, text: string): CheckResult {
     if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "RegExp") {
       const first = node.arguments?.[0];
       if (first !== undefined && !ts.isStringLiteralLike(first) && !ts.isRegularExpressionLiteral(first)) {
-        report("dynamic-regexp", node, "A pattern built from a variable can be abused to freeze the server (ReDoS) or to change what matches. Escape the value, limit its length, or avoid a regular expression.");
+        report(
+          "dynamic-regexp",
+          node,
+          "A pattern built from a variable can be abused to freeze the server (ReDoS) or to change what matches. Escape the value, limit its length, or avoid a regular expression.",
+        );
       }
     }
     if (ts.isPropertyAssignment(node)) {
@@ -90,7 +109,11 @@ function checkSource(file: string, text: string): CheckResult {
         report("tls-verification-off", node, "Certificate checking is switched off. Fix the certificate chain instead.");
       }
       if ((key === "httpOnly" || key === "secure") && value.kind === ts.SyntaxKind.FalseKeyword) {
-        report("cookie-flags", node, `A cookie with ${key}: false can be read by scripts or sent over plain HTTP. Session cookies are always httpOnly and secure.`);
+        report(
+          "cookie-flags",
+          node,
+          `A cookie with ${key}: false can be read by scripts or sent over plain HTTP. Session cookies are always httpOnly and secure.`,
+        );
       }
       if (key === "origin" && (stringValue(value) === "*" || value.kind === ts.SyntaxKind.TrueKeyword)) {
         report("cors-open", node, "Every website may call this API from a browser. List the allowed origins.");

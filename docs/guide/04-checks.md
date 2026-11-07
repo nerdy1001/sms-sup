@@ -1,15 +1,17 @@
 # 4. The checks: what runs, and how to read it
 
-`npm run check` runs three things in order. It stops being friendly only when something is wrong. Two
+`npm run check` runs five things in order. It stops being friendly only when something is wrong. Two
 more scans run only on GitHub, because they need the internet or the whole history (see below).
 
 | Step | Command | What it answers |
 |---|---|---|
 | 1. Types | `npm run typecheck` | Does the TypeScript compiler accept the code, in strict mode? |
-| 2. Rules | `npm run check:rules` | Does the code respect the architecture and the coding standards? |
-| 3. Tests | `npm test` | Do the tests, including the tests of the checks themselves, pass? |
+| 2. Lint | `npm run lint` | Does ESLint find a mistake that the compiler does not (an unused variable, a promise nobody waits for, a wrong React hook)? |
+| 3. Format | `npm run format:check` | Is every `.ts` and `.tsx` file laid out the way Prettier writes it? If not, run `npm run format`. |
+| 4. Rules | `npm run check:rules` | Does the code respect the architecture and the coding standards? |
+| 5. Tests | `npm test` | Do the tests, including the tests of the checks themselves, pass? |
 
-GitHub runs the same three steps on every pull request, plus the extra scans.
+GitHub runs the same five steps on every pull request, plus the extra scans.
 
 ## How the rules robot works
 
@@ -21,7 +23,7 @@ find the facts it needs:
 3. every comment (to find suppressions and forbidden directives),
 4. a few forms of code, such as `process.env` or `console.log`.
 
-It compares those facts with the rules in `tools/rules.config.ts` and prints a list. Ten parts:
+It compares those facts with the rules in `tools/rules.config.ts` and prints a list. Eleven parts:
 
 | Part | Looks at | Example of what it catches |
 |---|---|---|
@@ -34,9 +36,15 @@ It compares those facts with the rules in `tools/rules.config.ts` and prints a l
 | `secrets` | Every text file, and file names | A key or password in a file. A `.env` file. A spreadsheet that may hold scholar data. |
 | `dependencies` | `package.json` files, the lock file, `.npmrc` | A version range. A library from a git address. A locked package without an integrity hash. |
 | `migrations` | SQL files in `migrations` and `seeds` folders | A table without row-level security. A gap in the numbering. A `begin` in a migration. A seed that cannot be run twice. |
+| `register` | `docs/dependencies.md` and the `package.json` files | A library with no row in the register, or a row with an empty answer. |
 | `infra` | Files in `infra/` | An image without a version. A port open to every address. A container with extra powers. A password in a file. A stale `cloud-init.yaml`. |
 
 Run one part only: `node tools/check.ts --only imports,sql`.
+
+Two things are checked by tests instead of by the robot, because they need the application itself:
+the file `docs/api/openapi.json` must match what the routes describe (`tools/api-docs.test.ts`; fix it
+with `npm run api:docs`), and the web layer is tested by sending requests through the whole
+application (`kernel/http/server.test.ts`).
 
 ## The scans that run only on GitHub
 

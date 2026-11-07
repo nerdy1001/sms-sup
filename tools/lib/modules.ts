@@ -78,7 +78,7 @@ export function discoverModules(root: string): ModuleInfo[] {
     for (const name of listDirectories(root, modulesDir)) {
       const dir = `${modulesDir}/${name}`;
       let manifest: ModuleManifest | undefined;
-      let problems: string[] = [];
+      let problems: string[];
       if (!fileExists(root, `${dir}/module.json`)) {
         problems = ["module.json is missing"];
       } else {

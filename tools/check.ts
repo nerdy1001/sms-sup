@@ -5,11 +5,13 @@ import { checkDocs } from "./checks/docs.ts";
 import { checkImports } from "./checks/imports.ts";
 import { checkInfra } from "./checks/infra.ts";
 import { checkMigrations } from "./checks/migrations.ts";
+import { checkRegister } from "./checks/register.ts";
 import { checkSecrets } from "./checks/secrets.ts";
 import { checkSecurity } from "./checks/security.ts";
 import { checkSql } from "./checks/sql.ts";
 import { checkStandards } from "./checks/standards.ts";
 import { checkStructure } from "./checks/structure.ts";
+import { checkWeb } from "./checks/web.ts";
 import type { CheckResult, Finding, Suppression } from "./lib/model.ts";
 
 export const CHECKS: Readonly<Record<string, (root: string) => CheckResult>> = {
@@ -23,6 +25,8 @@ export const CHECKS: Readonly<Record<string, (root: string) => CheckResult>> = {
   dependencies: (root) => checkDependencies(root),
   infra: checkInfra,
   migrations: checkMigrations,
+  register: checkRegister,
+  web: checkWeb,
 };
 
 export interface Report {

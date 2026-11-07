@@ -20,7 +20,11 @@ const DETECTORS: readonly Detector[] = [
   { rule: "aws-access-key", description: "an AWS access key id", regex: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/ },
   { rule: "github-token", description: "a GitHub token", regex: /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,})\b/ },
   { rule: "slack-token", description: "a Slack token", regex: /\bxox[abprs]-[A-Za-z0-9-]{10,}/ },
-  { rule: "slack-webhook", description: "a Slack webhook address", regex: /https:\/\/hooks\.slack\.com\/(?:services|workflows)\/[A-Za-z0-9/_-]{20,}/ },
+  {
+    rule: "slack-webhook",
+    description: "a Slack webhook address",
+    regex: /https:\/\/hooks\.slack\.com\/(?:services|workflows)\/[A-Za-z0-9/_-]{20,}/,
+  },
   { rule: "google-api-key", description: "a Google API key", regex: /\bAIza[0-9A-Za-z_-]{35}\b/ },
   { rule: "stripe-key", description: "a live Stripe key", regex: /\b[sr]k_live_[0-9A-Za-z]{16,}\b/ },
   { rule: "npm-token", description: "an npm access token", regex: /\bnpm_[A-Za-z0-9]{36}\b/ },
@@ -28,10 +32,24 @@ const DETECTORS: readonly Detector[] = [
 ];
 
 const CREDENTIAL_URL = /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|rediss?|amqps?):\/\/[^\s:@/'"]+:([^\s@/'"]+)@/;
-const KEYWORD_ASSIGNMENT = /\b[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|private[_-]?key|access[_-]?key|auth)[A-Za-z0-9_.-]*["']?\s*[:=]\s*(["'`])([^"'`\s]{12,})\1/i;
+const KEYWORD_ASSIGNMENT =
+  /\b[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|apikey|private[_-]?key|access[_-]?key|auth)[A-Za-z0-9_.-]*["']?\s*[:=]\s*(["'`])([^"'`\s]{12,})\1/i;
 
-const PLACEHOLDER = /^(?:\$|<|\{\{|%|\*+$|x+$|\.\.\.)|\$\{|example|changeme|change-me|placeholder|your[-_ ]|dummy|sample|redacted|xxxx|\*\*\*\*/i;
-const COMMON_PASSWORDS = new Set(["password", "pass", "passwd", "secret", "admin", "root", "postgres", "user", "test", "changeme", "example"]);
+const PLACEHOLDER =
+  /^(?:\$|<|\{\{|%|\*+$|x+$|\.\.\.)|\$\{|example|changeme|change-me|placeholder|your[-_ ]|dummy|sample|redacted|xxxx|\*\*\*\*/i;
+const COMMON_PASSWORDS = new Set([
+  "password",
+  "pass",
+  "passwd",
+  "secret",
+  "admin",
+  "root",
+  "postgres",
+  "user",
+  "test",
+  "changeme",
+  "example",
+]);
 
 export function mask(value: string): string {
   return `${value.slice(0, 4)}... (${value.length} characters)`;
@@ -67,7 +85,14 @@ export function scanLine(line: string): SecretHit[] {
   }
   const assignment = KEYWORD_ASSIGNMENT.exec(line);
   const value = assignment?.[2];
-  if (value !== undefined && !isPlaceholder(value) && /\d/.test(value) && /[A-Za-z]/.test(value) && entropy(value) >= 3.3 && !hits.some((hit) => hit.rule !== "credential-url")) {
+  if (
+    value !== undefined &&
+    !isPlaceholder(value) &&
+    /\d/.test(value) &&
+    /[A-Za-z]/.test(value) &&
+    entropy(value) >= 3.3 &&
+    !hits.some((hit) => hit.rule !== "credential-url")
+  ) {
     hits.push({ rule: "secret-assignment", description: "a value that looks like a password, key or token", preview: mask(value) });
   }
   return hits;
@@ -175,11 +200,35 @@ export interface FileNameRule {
 }
 
 const SECRET_FILE_NAMES: readonly { readonly pattern: RegExp; readonly result: FileNameRule }[] = [
-  { pattern: /(^|\/)\.env(\.(?!example$|sample$|template$)[^/]+)?$/, result: { rule: "secret-file", severity: "error", message: "Environment files hold secrets and never enter the repository. Commit a .env.example without values." } },
-  { pattern: /\.(pem|key|p12|pfx|jks|keystore|kdbx)$/, result: { rule: "secret-file", severity: "error", message: "Key and certificate files never enter the repository." } },
-  { pattern: /(^|\/)id_(rsa|dsa|ecdsa|ed25519)$/, result: { rule: "secret-file", severity: "error", message: "A private SSH key never enters the repository." } },
-  { pattern: /\.(xlsx|xls|ods|dump|bak|sqlite3?|db)$/, result: { rule: "data-file", severity: "error", message: "Spreadsheets, database files and dumps may hold personal data of scholars. Only synthetic data (task FN-08) is committed, as code or plain fixtures." } },
-  { pattern: /\.csv$/, result: { rule: "data-file", severity: "warning", message: "A CSV file may hold personal data. Confirm that it is synthetic." } },
+  {
+    pattern: /(^|\/)\.env(\.(?!example$|sample$|template$)[^/]+)?$/,
+    result: {
+      rule: "secret-file",
+      severity: "error",
+      message: "Environment files hold secrets and never enter the repository. Commit a .env.example without values.",
+    },
+  },
+  {
+    pattern: /\.(pem|key|p12|pfx|jks|keystore|kdbx)$/,
+    result: { rule: "secret-file", severity: "error", message: "Key and certificate files never enter the repository." },
+  },
+  {
+    pattern: /(^|\/)id_(rsa|dsa|ecdsa|ed25519)$/,
+    result: { rule: "secret-file", severity: "error", message: "A private SSH key never enters the repository." },
+  },
+  {
+    pattern: /\.(xlsx|xls|ods|dump|bak|sqlite3?|db)$/,
+    result: {
+      rule: "data-file",
+      severity: "error",
+      message:
+        "Spreadsheets, database files and dumps may hold personal data of scholars. Only synthetic data (task FN-08) is committed, as code or plain fixtures.",
+    },
+  },
+  {
+    pattern: /\.csv$/,
+    result: { rule: "data-file", severity: "warning", message: "A CSV file may hold personal data. Confirm that it is synthetic." },
+  },
 ];
 
 export function checkFileName(path: string): FileNameRule | undefined {

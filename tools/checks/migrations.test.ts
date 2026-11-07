@@ -28,7 +28,13 @@ const SAFE_TABLE = [
 describe("splitting statements", () => {
   test("splits at semicolons and records the line", () => {
     const parts = splitStatements("select 1;\n\nselect 2;");
-    assert.deepEqual(parts.map((item) => [item.text, item.line]), [["select 1", 1], ["select 2", 3]]);
+    assert.deepEqual(
+      parts.map((item) => [item.text, item.line]),
+      [
+        ["select 1", 1],
+        ["select 2", 3],
+      ],
+    );
   });
   test("keeps a function body in one statement", () => {
     const sql = "create function f() returns int language plpgsql as $$\nbegin\n  return 1;\nend\n$$;\nselect 2;";
@@ -40,13 +46,23 @@ describe("splitting statements", () => {
     assert.equal(splitStatements("do $body$ begin perform 1; end $body$; select 'a;b';").length, 2);
   });
   test("ignores comments, including ones with semicolons", () => {
-    assert.deepEqual(splitStatements("-- one; two\nselect 1; /* x; y */ select 2;").map((item) => item.text), ["select 1", "select 2"]);
+    assert.deepEqual(
+      splitStatements("-- one; two\nselect 1; /* x; y */ select 2;").map((item) => item.text),
+      ["select 1", "select 2"],
+    );
   });
 });
 
 describe("a clean set of files", () => {
   test("passes", () => {
-    assert.deepEqual(rules({ [`${KERNEL}/0001_a.sql`]: SAFE_TABLE, [`${KERNEL}/0002_b.sql`]: "create schema if not exists platform;", [`${SEEDS}/0001_s.sql`]: "insert into platform.things values (1) on conflict do nothing;" }), []);
+    assert.deepEqual(
+      rules({
+        [`${KERNEL}/0001_a.sql`]: SAFE_TABLE,
+        [`${KERNEL}/0002_b.sql`]: "create schema if not exists platform;",
+        [`${SEEDS}/0001_s.sql`]: "insert into platform.things values (1) on conflict do nothing;",
+      }),
+      [],
+    );
   });
   test("no SQL files at all passes", () => {
     assert.deepEqual(rules({}), []);
@@ -58,16 +74,30 @@ describe("row-level security", () => {
     assert.deepEqual(rules({ [`${KERNEL}/0001_a.sql`]: "create table platform.things (id int);" }), ["migration-rls-missing"]);
   });
   test("a table with it enabled but not forced is an error", () => {
-    assert.deepEqual(rules({ [`${KERNEL}/0001_a.sql`]: "create table platform.things (id int);\nalter table platform.things enable row level security;" }), ["migration-rls-not-forced"]);
+    assert.deepEqual(
+      rules({ [`${KERNEL}/0001_a.sql`]: "create table platform.things (id int);\nalter table platform.things enable row level security;" }),
+      ["migration-rls-not-forced"],
+    );
   });
   test("it must be on the same table", () => {
-    assert.deepEqual(rules({ [`${KERNEL}/0001_a.sql`]: "create table platform.a (id int);\ncreate table platform.b (id int);\nalter table platform.a enable row level security;\nalter table platform.a force row level security;" }), ["migration-rls-missing"]);
+    assert.deepEqual(
+      rules({
+        [`${KERNEL}/0001_a.sql`]:
+          "create table platform.a (id int);\ncreate table platform.b (id int);\nalter table platform.a enable row level security;\nalter table platform.a force row level security;",
+      }),
+      ["migration-rls-missing"],
+    );
   });
   test("a module table is held to the same rule", () => {
-    assert.deepEqual(rules({ [`${MODULE}/0001_a.sql`]: "create schema registry;\ncreate table registry.t (id int);" }), ["migration-rls-missing"]);
+    assert.deepEqual(rules({ [`${MODULE}/0001_a.sql`]: "create schema registry;\ncreate table registry.t (id int);" }), [
+      "migration-rls-missing",
+    ]);
   });
   test("a comment that mentions the statement does not count", () => {
-    assert.deepEqual(rules({ [`${KERNEL}/0001_a.sql`]: "create table platform.t (id int);\n-- alter table platform.t enable row level security;" }), ["migration-rls-missing"]);
+    assert.deepEqual(
+      rules({ [`${KERNEL}/0001_a.sql`]: "create table platform.t (id int);\n-- alter table platform.t enable row level security;" }),
+      ["migration-rls-missing"],
+    );
   });
   test("a table without a schema is an error", () => {
     assert.ok(rules({ [`${MODULE}/0001_a.sql`]: "create table t (id int);" }).includes("migration-unqualified-object"));
@@ -79,10 +109,16 @@ describe("row-level security", () => {
 
 describe("other migration rules", () => {
   test("transaction control is refused", () => {
-    assert.deepEqual(rules({ [`${KERNEL}/0001_a.sql`]: "begin;\nselect 1;\ncommit;" }), ["migration-transaction-control", "migration-transaction-control"]);
+    assert.deepEqual(rules({ [`${KERNEL}/0001_a.sql`]: "begin;\nselect 1;\ncommit;" }), [
+      "migration-transaction-control",
+      "migration-transaction-control",
+    ]);
   });
   test("begin inside a function body is fine", () => {
-    assert.deepEqual(rules({ [`${KERNEL}/0001_a.sql`]: "create function platform.f() returns int language plpgsql as $$ begin return 1; end $$;" }), []);
+    assert.deepEqual(
+      rules({ [`${KERNEL}/0001_a.sql`]: "create function platform.f() returns int language plpgsql as $$ begin return 1; end $$;" }),
+      [],
+    );
   });
   test("granting to public is refused", () => {
     assert.deepEqual(rules({ [`${KERNEL}/0001_a.sql`]: "grant select on platform.x to public;" }), ["migration-grant-public"]);
@@ -97,7 +133,10 @@ describe("other migration rules", () => {
   test("deleting data is a warning, not an error", () => {
     project = createProject({ [`${KERNEL}/0001_a.sql`]: "drop table platform.old;" });
     const found = checkMigrations(project.root).findings;
-    assert.deepEqual(found.map((item) => [item.rule, item.severity]), [["migration-destructive", "warning"]]);
+    assert.deepEqual(
+      found.map((item) => [item.rule, item.severity]),
+      [["migration-destructive", "warning"]],
+    );
   });
   test("a platform migration may not touch another schema or create without a schema", () => {
     assert.deepEqual(rules({ [`${KERNEL}/0001_a.sql`]: "select * from registry.scholars;" }), ["migration-foreign-schema"]);

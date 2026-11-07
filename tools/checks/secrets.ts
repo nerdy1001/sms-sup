@@ -15,7 +15,14 @@ export function checkSecrets(root: string): CheckResult {
     if (text.length > MAXIMUM_BYTES || text.includes("\0")) continue;
     const scan = scanText(text);
     for (const { line, hit } of scan.hits) {
-      findings.push(finding(`secret-${hit.rule}`, file, `Looks like ${hit.description} (${hit.preview}). Remove it, rotate it if it was ever real, and read it from the environment. A documented example can carry "secrets-allow: ${hit.rule} -- <reason>".`, line));
+      findings.push(
+        finding(
+          `secret-${hit.rule}`,
+          file,
+          `Looks like ${hit.description} (${hit.preview}). Remove it, rotate it if it was ever real, and read it from the environment. A documented example can carry "secrets-allow: ${hit.rule} -- <reason>".`,
+          line,
+        ),
+      );
     }
     for (const item of scan.allowed) suppressions.push({ rule: `secret-${item.rule}`, file, line: item.line, reason: item.reason });
   }

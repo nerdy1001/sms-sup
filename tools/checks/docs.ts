@@ -38,38 +38,51 @@ function checkTaskRecords(root: string, findings: Finding[]): void {
   if (!hasProgress) {
     findings.push(finding("doc-task-record", "docs/progress.md", "The progress log is missing, but task records exist."));
   } else {
-    readText(root, "docs/progress.md").split("\n").forEach((text, index) => {
-      const match = TASK_ROW.exec(text);
-      if (match === null) return;
-      const id = match[1] ?? "";
-      const cells = (match[2] ?? "").split("|").map((cell) => cell.trim());
-      const line = index + 1;
-      if (rows.has(id)) {
-        findings.push(finding("doc-task-record", "docs/progress.md", `${id} appears twice in the progress log.`, line));
-        return;
-      }
-      const [, milestone = "", status = "", date = "", record = ""] = cells;
-      if (cells.length !== 5 || milestone === "") {
-        findings.push(finding("doc-task-record", "docs/progress.md", `The row of ${id} needs: task, title, milestone, status, date, record.`, line));
-        return;
-      }
-      if (!STATUSES.includes(status)) {
-        findings.push(finding("doc-task-record", "docs/progress.md", `${id} has status "${status}". Use ${STATUSES.join(" or ")}.`, line));
-      }
-      if (!DATE.test(date)) {
-        findings.push(finding("doc-task-record", "docs/progress.md", `${id} has date "${date}". Use YYYY-MM-DD.`, line));
-      }
-      if (!record.includes(`tasks/${id}.md`)) {
-        findings.push(finding("doc-task-record", "docs/progress.md", `${id} must link to its record: [${id}](tasks/${id}.md).`, line));
-      }
-      rows.set(id, { status, date, line });
-    });
+    readText(root, "docs/progress.md")
+      .split("\n")
+      .forEach((text, index) => {
+        const match = TASK_ROW.exec(text);
+        if (match === null) return;
+        const id = match[1] ?? "";
+        const cells = (match[2] ?? "").split("|").map((cell) => cell.trim());
+        const line = index + 1;
+        if (rows.has(id)) {
+          findings.push(finding("doc-task-record", "docs/progress.md", `${id} appears twice in the progress log.`, line));
+          return;
+        }
+        const [, milestone = "", status = "", date = "", record = ""] = cells;
+        if (cells.length !== 5 || milestone === "") {
+          findings.push(
+            finding("doc-task-record", "docs/progress.md", `The row of ${id} needs: task, title, milestone, status, date, record.`, line),
+          );
+          return;
+        }
+        if (!STATUSES.includes(status)) {
+          findings.push(
+            finding("doc-task-record", "docs/progress.md", `${id} has status "${status}". Use ${STATUSES.join(" or ")}.`, line),
+          );
+        }
+        if (!DATE.test(date)) {
+          findings.push(finding("doc-task-record", "docs/progress.md", `${id} has date "${date}". Use YYYY-MM-DD.`, line));
+        }
+        if (!record.includes(`tasks/${id}.md`)) {
+          findings.push(finding("doc-task-record", "docs/progress.md", `${id} must link to its record: [${id}](tasks/${id}.md).`, line));
+        }
+        rows.set(id, { status, date, line });
+      });
   }
 
   for (const [id, row] of rows) {
     const path = `docs/tasks/${id}.md`;
     if (!fileExists(root, path)) {
-      findings.push(finding("doc-task-record", "docs/progress.md", `${id} is in the progress log but ${path} does not exist. Copy docs/tasks/_template.md.`, row.line));
+      findings.push(
+        finding(
+          "doc-task-record",
+          "docs/progress.md",
+          `${id} is in the progress log but ${path} does not exist. Copy docs/tasks/_template.md.`,
+          row.line,
+        ),
+      );
     }
   }
 
@@ -81,9 +94,16 @@ function checkTaskRecords(root: string, findings: Finding[]): void {
       findings.push(finding("doc-task-record", file, `${id} has a record but no row in docs/progress.md.`));
     }
     if (!text.startsWith(`# ${id}`)) {
-      findings.push(finding("doc-task-record", file, `The first line must be a heading that starts with the task ID: "# ${id}: title".`, 1));
+      findings.push(
+        finding("doc-task-record", file, `The first line must be a heading that starts with the task ID: "# ${id}: title".`, 1),
+      );
     }
-    const headings = new Set(text.split("\n").filter((line) => line.startsWith("## ")).map((line) => line.slice(3).trim()));
+    const headings = new Set(
+      text
+        .split("\n")
+        .filter((line) => line.startsWith("## "))
+        .map((line) => line.slice(3).trim()),
+    );
     for (const section of REQUIRED_SECTIONS) {
       if (!headings.has(section)) {
         findings.push(finding("doc-task-record", file, `Missing section "## ${section}".`));
@@ -91,9 +111,21 @@ function checkTaskRecords(root: string, findings: Finding[]): void {
     }
     const statusLine = /^Status:\s*([A-Za-z ]+?)\s*\((\d{4}-\d{2}-\d{2})\)/m.exec(text);
     if (statusLine === null) {
-      findings.push(finding("doc-task-record", file, 'Add a line "Status: In progress (YYYY-MM-DD)", "Status: Delivered (YYYY-MM-DD)" or "Status: Complete (YYYY-MM-DD)".'));
+      findings.push(
+        finding(
+          "doc-task-record",
+          file,
+          'Add a line "Status: In progress (YYYY-MM-DD)", "Status: Delivered (YYYY-MM-DD)" or "Status: Complete (YYYY-MM-DD)".',
+        ),
+      );
     } else if (row !== undefined && (statusLine[1] !== row.status || statusLine[2] !== row.date)) {
-      findings.push(finding("doc-task-record", file, `The status here (${statusLine[1]}, ${statusLine[2]}) differs from the progress log (${row.status}, ${row.date}). Keep them the same.`));
+      findings.push(
+        finding(
+          "doc-task-record",
+          file,
+          `The status here (${statusLine[1]}, ${statusLine[2]}) differs from the progress log (${row.status}, ${row.date}). Keep them the same.`,
+        ),
+      );
     }
   }
 }

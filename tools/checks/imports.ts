@@ -12,6 +12,7 @@ type Target =
   | { readonly kind: "relative"; readonly path: string }
   | { readonly kind: "builtin"; readonly base: string }
   | { readonly kind: "workspace"; readonly info: PackageInfo; readonly deep: boolean }
+  | { readonly kind: "asset" }
   | { readonly kind: "external"; readonly name: string }
   | { readonly kind: "unresolved" };
 
@@ -37,7 +38,7 @@ function matchesAny(path: string, patterns: readonly RegExp[]): boolean {
 }
 
 function inScope(file: string): boolean {
-  return file.endsWith(".ts") && !file.endsWith(".d.ts") && /^(apps|packages)\/[^/]+\/src\//.test(file);
+  return /\.tsx?$/.test(file) && !file.endsWith(".d.ts") && /^(apps|packages)\/[^/]+\/src\//.test(file);
 }
 
 export function checkImports(root: string): CheckResult {
@@ -59,7 +60,11 @@ export function checkImports(root: string): CheckResult {
     };
 
     for (const computed of scan.computed) {
-      report("no-computed-import", computed.line, `${computed.kind === "dynamic" ? "import()" : "require()"} with a computed path hides a dependency from the boundary checks. Use a fixed string.`);
+      report(
+        "no-computed-import",
+        computed.line,
+        `${computed.kind === "dynamic" ? "import()" : "require()"} with a computed path hides a dependency from the boundary checks. Use a fixed string.`,
+      );
     }
 
     for (const ref of scan.imports) {
@@ -87,8 +92,14 @@ export function checkImports(root: string): CheckResult {
     const fromApp = appOf(where);
     const line = ref.line;
 
+    if (target.kind === "asset") return;
+
     if (target.kind === "unresolved") {
-      report("unresolved-import", line, `"${ref.specifier}" does not resolve to a file. Check the path and write the .ts extension.`);
+      report(
+        "unresolved-import",
+        line,
+        `"${ref.specifier}" does not resolve to a file. Check the path and write the .ts or .tsx extension.`,
+      );
       return;
     }
 
@@ -104,9 +115,13 @@ export function checkImports(root: string): CheckResult {
       // Zones and packages.
       if (fromApp !== undefined && targetApp !== undefined && fromApp !== targetApp) {
         const sameZone = Object.values(rules.zones).some((zone: readonly string[]) => zone.includes(fromApp) && zone.includes(targetApp));
-        report("zone-isolation", line, sameZone
-          ? `${fromApp} must not import code from ${targetApp}. Applications never import each other; shared data shapes go in packages/contracts.`
-          : `${fromApp} must never import code from ${targetApp}: they run in different security zones. Shared data shapes go in packages/contracts.`);
+        report(
+          "zone-isolation",
+          line,
+          sameZone
+            ? `${fromApp} must not import code from ${targetApp}. Applications never import each other; shared data shapes go in packages/contracts.`
+            : `${fromApp} must never import code from ${targetApp}: they run in different security zones. Shared data shapes go in packages/contracts.`,
+        );
         return;
       }
       if (where.kind === "package" && targetApp !== undefined) {
@@ -121,7 +136,11 @@ export function checkImports(root: string): CheckResult {
 
       // Inside one application.
       if (where.kind === "kernel" && (targetWhere.kind === "module" || targetWhere.kind === "app")) {
-        report("kernel-isolation", line, `The kernel must not depend on modules or on the application entry point (${targetPath}). Modules depend on the kernel, never the reverse.`);
+        report(
+          "kernel-isolation",
+          line,
+          `The kernel must not depend on modules or on the application entry point (${targetPath}). Modules depend on the kernel, never the reverse.`,
+        );
         return;
       }
       if (where.kind === "module" && targetWhere.kind === "app") {
@@ -133,13 +152,21 @@ export function checkImports(root: string): CheckResult {
         const sameModule = where.kind === "module" && where.module === targetWhere.module;
         if (!sameModule) {
           if (!isPublicApi) {
-            report("module-public-api", line, `Import the "${targetWhere.module}" module through its public API (modules/${targetWhere.module}/index.ts), not through ${targetPath}.`);
+            report(
+              "module-public-api",
+              line,
+              `Import the "${targetWhere.module}" module through its public API (modules/${targetWhere.module}/index.ts), not through ${targetPath}.`,
+            );
             return;
           }
           if (where.kind === "module") {
             const manifest = manifests.get(`${fromApp}:${where.module}`);
             if (manifest !== undefined && !manifest.dependsOn.includes(targetWhere.module)) {
-              report("module-declared-dependency", line, `Module "${where.module}" imports module "${targetWhere.module}" but does not declare it. Add "${targetWhere.module}" to dependsOn in its module.json (a deliberate, reviewed change).`);
+              report(
+                "module-declared-dependency",
+                line,
+                `Module "${where.module}" imports module "${targetWhere.module}" but does not declare it. Add "${targetWhere.module}" to dependsOn in its module.json (a deliberate, reviewed change).`,
+              );
             }
             if (!where.test) usedDependencies.add(`${fromApp}:${where.module}>${targetWhere.module}`);
           }
@@ -149,11 +176,19 @@ export function checkImports(root: string): CheckResult {
         if (where.layer in LAYER_MAY_IMPORT) {
           const fromLayer = where.layer as Layer;
           if (targetWhere.layer === "root" && !where.test) {
-            report("layer-direction", line, `The ${fromLayer} layer must not import the module root (${targetPath}); the root wires the layers, never the reverse.`);
+            report(
+              "layer-direction",
+              line,
+              `The ${fromLayer} layer must not import the module root (${targetPath}); the root wires the layers, never the reverse.`,
+            );
           } else if ((LAYERS as readonly string[]).includes(targetWhere.layer)) {
             const toLayer = targetWhere.layer as Layer;
             if (!LAYER_MAY_IMPORT[fromLayer].includes(toLayer)) {
-              report("layer-direction", line, `The ${fromLayer} layer must not import the ${toLayer} layer. Allowed: ${LAYER_MAY_IMPORT[fromLayer].join(", ")}.`);
+              report(
+                "layer-direction",
+                line,
+                `The ${fromLayer} layer must not import the ${toLayer} layer. Allowed: ${LAYER_MAY_IMPORT[fromLayer].join(", ")}.`,
+              );
             }
           }
         }
@@ -167,10 +202,21 @@ export function checkImports(root: string): CheckResult {
         report("forbidden-builtin", line, `"node:${base}" is not allowed in application code (it can run arbitrary programs or code).`);
       }
       checkNetwork(file, where, line, base, "builtins", report);
-      if (where.kind === "module" && !where.test && (where.layer === "domain" || where.layer === "application") && !rules.pureLayerAllowedExternal.includes(`node:${base}`)) {
-        report("layer-purity", line, `The ${where.layer} layer must stay free of Node modules ("node:${base}"). Put technical code in the infrastructure layer or the kernel.`);
+      if (
+        where.kind === "module" &&
+        !where.test &&
+        (where.layer === "domain" || where.layer === "application") &&
+        !rules.pureLayerAllowedExternal.includes(`node:${base}`)
+      ) {
+        report(
+          "layer-purity",
+          line,
+          `The ${where.layer} layer must stay free of Node modules ("node:${base}"). Put technical code in the infrastructure layer or the kernel.`,
+        );
       }
-      if (where.kind === "package" && where.name === "contracts") {
+      // The shapes themselves use no Node module. Their tests may use the test runner and assertions.
+      const testTooling = where.kind === "package" && where.test && (rules.contracts.allowedInTests as readonly string[]).includes(base);
+      if (where.kind === "package" && where.name === "contracts" && !testTooling) {
         report("contracts-purity", line, `packages/contracts must not use Node modules ("node:${base}").`);
       }
       return;
@@ -181,13 +227,21 @@ export function checkImports(root: string): CheckResult {
         report("no-deep-package-import", line, `Import "${target.info.name}" by its name only, without a sub-path.`);
       }
       if (target.info.dir.startsWith("apps/")) {
-        report("zone-isolation", line, `Applications must not import another application ("${target.info.name}"). Shared data shapes go in packages/contracts.`);
+        report(
+          "zone-isolation",
+          line,
+          `Applications must not import another application ("${target.info.name}"). Shared data shapes go in packages/contracts.`,
+        );
         return;
       }
       if (where.kind === "package" && where.name === "contracts" && target.info.name !== rules.contracts.packageName) {
         report("contracts-purity", line, `packages/contracts must not depend on other packages ("${target.info.name}").`);
       }
-      if (target.info.name !== owner.name && !owner.dependencies.has(target.info.name) && !(where.test && owner.devDependencies.has(target.info.name))) {
+      if (
+        target.info.name !== owner.name &&
+        !owner.dependencies.has(target.info.name) &&
+        !(where.test && owner.devDependencies.has(target.info.name))
+      ) {
         report("undeclared-dependency", line, `"${target.info.name}" is not listed in dependencies of ${owner.dir}/package.json.`);
       }
       return;
@@ -199,15 +253,32 @@ export function checkImports(root: string): CheckResult {
     if ((rules.database.drivers as readonly string[]).includes(name) && !matchesAny(file, rules.database.allowedPaths)) {
       report("database-driver", line, `Database driver "${name}" may only be used in a module's infrastructure layer or in kernel/db.`);
     }
-    if (where.kind === "module" && !where.test && (where.layer === "domain" || where.layer === "application") && !rules.pureLayerAllowedExternal.includes(name)) {
-      report("layer-purity", line, `The ${where.layer} layer must stay free of external libraries ("${name}"). Put technical code in the infrastructure layer or the kernel.`);
+    if (
+      where.kind === "module" &&
+      !where.test &&
+      (where.layer === "domain" || where.layer === "application") &&
+      !rules.pureLayerAllowedExternal.includes(name)
+    ) {
+      report(
+        "layer-purity",
+        line,
+        `The ${where.layer} layer must stay free of external libraries ("${name}"). Put technical code in the infrastructure layer or the kernel.`,
+      );
     }
     if (where.kind === "package" && where.name === "contracts" && !(rules.contracts.allowedExternal as readonly string[]).includes(name)) {
-      report("contracts-purity", line, `packages/contracts may only depend on: ${rules.contracts.allowedExternal.join(", ")} ("${name}" is not allowed).`);
+      report(
+        "contracts-purity",
+        line,
+        `packages/contracts may only depend on: ${rules.contracts.allowedExternal.join(", ")} ("${name}" is not allowed).`,
+      );
     }
     const declared = owner.dependencies.has(name) || (where.test && owner.devDependencies.has(name));
     if (!declared) {
-      report("undeclared-dependency", line, `"${name}" is not listed in ${where.test ? "dependencies or devDependencies" : "dependencies"} of ${owner.dir}/package.json. Add it (with an exact version) and say why in the pull request.`);
+      report(
+        "undeclared-dependency",
+        line,
+        `"${name}" is not listed in ${where.test ? "dependencies or devDependencies" : "dependencies"} of ${owner.dir}/package.json. Add it (with an exact version) and say why in the pull request.`,
+      );
     }
   }
 
@@ -225,7 +296,11 @@ export function checkImports(root: string): CheckResult {
     if (app !== undefined && !(app in rules.egress.allowedPaths)) return; // web applications run in a browser
     const allowed = app === undefined ? [] : (rules.egress.allowedPaths[app] ?? []);
     if (!matchesAny(file, allowed)) {
-      report("network-egress", line, `"${name}" opens or uses network connections. It is only allowed in the HTTP server kernel, the mail and sync infrastructure, and main.ts (see docs/boundaries.md).`);
+      report(
+        "network-egress",
+        line,
+        `"${name}" opens or uses network connections. It is only allowed in the HTTP server kernel, the mail and sync infrastructure, and main.ts (see docs/boundaries.md).`,
+      );
     }
   }
 
@@ -239,7 +314,15 @@ export function checkImports(root: string): CheckResult {
     if (info.manifest === undefined) continue;
     for (const dependency of info.manifest.dependsOn) {
       if (!usedDependencies.has(`${info.app}:${info.name}>${dependency}`)) {
-        findings.push(finding("unused-declared-dependency", `${info.dir}/module.json`, `"${info.name}" declares a dependency on "${dependency}" that no code uses. Remove it if it is no longer planned.`, undefined, "warning"));
+        findings.push(
+          finding(
+            "unused-declared-dependency",
+            `${info.dir}/module.json`,
+            `"${info.name}" declares a dependency on "${dependency}" that no code uses. Remove it if it is no longer planned.`,
+            undefined,
+            "warning",
+          ),
+        );
       }
     }
   }
@@ -251,8 +334,11 @@ function classify(root: string, file: string, ref: ImportRef, byName: ReadonlyMa
   const specifier = ref.specifier;
   if (specifier.startsWith(".")) {
     if (specifier.endsWith(".json")) return { kind: "unresolved" };
+    // A style sheet next to the code that imports it (the build tool bundles it). It is not code.
+    if (specifier.endsWith(".css") && fileExists(root, posix.normalize(posix.join(posix.dirname(file), specifier))))
+      return { kind: "asset" };
     const candidate = posix.normalize(posix.join(posix.dirname(file), specifier));
-    if (fileExists(root, candidate) && candidate.endsWith(".ts")) {
+    if (fileExists(root, candidate) && /\.tsx?$/.test(candidate)) {
       return { kind: "relative", path: candidate };
     }
     const swapped = candidate.replace(/\.js$/, ".ts");

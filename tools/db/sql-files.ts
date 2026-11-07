@@ -31,7 +31,13 @@ export function describeSqlFile(file: string): SqlFile | undefined {
   }
   const module = MODULE.exec(file);
   if (module !== null) {
-    return { app: module[1] ?? "", scope: module[2] ?? "", kind: module[3] === "seeds" ? "seed" : "migration", file, name: module[4] ?? "" };
+    return {
+      app: module[1] ?? "",
+      scope: module[2] ?? "",
+      kind: module[3] === "seeds" ? "seed" : "migration",
+      file,
+      name: module[4] ?? "",
+    };
   }
   return undefined;
 }
@@ -62,7 +68,9 @@ export interface LoadedSql extends SqlFile {
 export function loadSqlFiles(root: string, kind: SqlKind, app: string): LoadedSql[] {
   return findSqlFiles(root, kind, app).map((described) => {
     if (!FILE_NAME.test(described.name)) {
-      throw new Error(`${described.file}: the name must look like 0001_short_description.sql (four digits, lowercase words joined by underscores).`);
+      throw new Error(
+        `${described.file}: the name must look like 0001_short_description.sql (four digits, lowercase words joined by underscores).`,
+      );
     }
     const sql = readText(root, described.file);
     return { ...described, sql, checksum: checksum(sql) };

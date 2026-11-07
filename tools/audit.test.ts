@@ -2,19 +2,39 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { evaluate, parseAudit, type Advisory } from "./audit.ts";
 
-const advisory = (id: string, pkg: string, severity: Advisory["severity"]): Advisory => ({ id, package: pkg, severity, title: "t", url: `https://github.com/advisories/${id}` });
+const advisory = (id: string, pkg: string, severity: Advisory["severity"]): Advisory => ({
+  id,
+  package: pkg,
+  severity,
+  title: "t",
+  url: `https://github.com/advisories/${id}`,
+});
 
 const report = (vulnerabilities: unknown): string => JSON.stringify({ auditReportVersion: 2, vulnerabilities });
 
 describe("parseAudit", () => {
   test("flattens advisories and ignores package names in via", () => {
     const text = report({
-      lodash: { name: "lodash", via: [{ source: 1, name: "lodash", title: "Prototype pollution", url: "https://github.com/advisories/GHSA-p6mc-m468-83gw", severity: "high" }] },
+      lodash: {
+        name: "lodash",
+        via: [
+          {
+            source: 1,
+            name: "lodash",
+            title: "Prototype pollution",
+            url: "https://github.com/advisories/GHSA-p6mc-m468-83gw",
+            severity: "high",
+          },
+        ],
+      },
       "uses-lodash": { name: "uses-lodash", via: ["lodash"] },
     });
     const parsed = parseAudit(text);
     assert.equal(parsed.error, undefined);
-    assert.deepEqual(parsed.advisories.map((item) => [item.id, item.package, item.severity]), [["GHSA-P6MC-M468-83GW", "lodash", "high"]]);
+    assert.deepEqual(
+      parsed.advisories.map((item) => [item.id, item.package, item.severity]),
+      [["GHSA-P6MC-M468-83GW", "lodash", "high"]],
+    );
   });
 
   test("the same advisory seen through two packages is listed once per package", () => {
@@ -52,26 +72,41 @@ describe("evaluate", () => {
 
   test("high and critical advisories in production block", () => {
     const result = evaluate([high, critical, moderate], [high, critical, moderate], new Set());
-    assert.deepEqual(result.blocking.map((item) => item.id), ["GHSA-1", "GHSA-2"]);
-    assert.deepEqual(result.warnings.map((item) => item.id), ["GHSA-3"]);
+    assert.deepEqual(
+      result.blocking.map((item) => item.id),
+      ["GHSA-1", "GHSA-2"],
+    );
+    assert.deepEqual(
+      result.warnings.map((item) => item.id),
+      ["GHSA-3"],
+    );
   });
 
   test("a serious advisory that is only in development tools warns", () => {
     const result = evaluate([], [devHigh], new Set());
     assert.deepEqual(result.blocking, []);
-    assert.deepEqual(result.warnings.map((item) => item.id), ["GHSA-4"]);
+    assert.deepEqual(
+      result.warnings.map((item) => item.id),
+      ["GHSA-4"],
+    );
   });
 
   test("an accepted advisory neither blocks nor warns", () => {
     const result = evaluate([high], [high], new Set(["GHSA-1"]));
     assert.deepEqual(result.blocking, []);
     assert.deepEqual(result.warnings, []);
-    assert.deepEqual(result.accepted.map((item) => item.id), ["GHSA-1"]);
+    assert.deepEqual(
+      result.accepted.map((item) => item.id),
+      ["GHSA-1"],
+    );
   });
 
   test("the same advisory id in another package is not covered by an acceptance of the first only when the id differs", () => {
     const result = evaluate([high, critical], [high, critical], new Set(["GHSA-1"]));
-    assert.deepEqual(result.blocking.map((item) => item.id), ["GHSA-2"]);
+    assert.deepEqual(
+      result.blocking.map((item) => item.id),
+      ["GHSA-2"],
+    );
   });
 
   test("no advisories means nothing to report", () => {

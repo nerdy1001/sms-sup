@@ -47,11 +47,23 @@ function checkManifests(root: string, findings: Finding[]): void {
       for (const [name, spec] of Object.entries(entries as Record<string, unknown>)) {
         const text = typeof spec === "string" ? spec : "";
         if (/^(git|github:|gitlab:|bitbucket:|https?:|file:|link:|npm:)/.test(text) || /^[\w.-]+\/[\w.-]+(#.*)?$/.test(text)) {
-          findings.push(finding("dependency-source", path, `${name} comes from "${text}". Dependencies come from the npm registry only, so that the lock file can vouch for them.`));
+          findings.push(
+            finding(
+              "dependency-source",
+              path,
+              `${name} comes from "${text}". Dependencies come from the npm registry only, so that the lock file can vouch for them.`,
+            ),
+          );
         } else if (text === "*" && WORKSPACE_PACKAGE.test(name)) {
           continue;
         } else if (!EXACT.test(text)) {
-          findings.push(finding("dependency-not-exact", path, `${name} is "${text}". Pin an exact version (1.2.3); ranges let a new release enter without a pull request.`));
+          findings.push(
+            finding(
+              "dependency-not-exact",
+              path,
+              `${name} is "${text}". Pin an exact version (1.2.3); ranges let a new release enter without a pull request.`,
+            ),
+          );
         }
       }
     }
@@ -73,7 +85,15 @@ function checkNpmrc(root: string, findings: Finding[]): void {
 
 function checkLockFile(root: string, findings: Finding[]): void {
   if (!fileExists(root, "package-lock.json")) {
-    findings.push(finding("lockfile-missing", "package-lock.json", "No lock file. Run npm install once and commit it: the install in CI and the audit depend on it.", undefined, "warning"));
+    findings.push(
+      finding(
+        "lockfile-missing",
+        "package-lock.json",
+        "No lock file. Run npm install once and commit it: the install in CI and the audit depend on it.",
+        undefined,
+        "warning",
+      ),
+    );
     return;
   }
   const lock = readJson(root, "package-lock.json");
@@ -90,11 +110,17 @@ function checkLockFile(root: string, findings: Finding[]): void {
     if (record.link === true || typeof record.resolved !== "string") continue;
     if (!record.resolved.startsWith(REGISTRY)) {
       foreign += 1;
-      if (foreign <= MAXIMUM_PER_RULE) findings.push(finding("lockfile-source", "package-lock.json", `${path} is fetched from ${record.resolved}, not from the npm registry.`));
+      if (foreign <= MAXIMUM_PER_RULE)
+        findings.push(
+          finding("lockfile-source", "package-lock.json", `${path} is fetched from ${record.resolved}, not from the npm registry.`),
+        );
     }
     if (typeof record.integrity !== "string" || record.integrity === "") {
       unchecked += 1;
-      if (unchecked <= MAXIMUM_PER_RULE) findings.push(finding("lockfile-integrity", "package-lock.json", `${path} has no integrity hash, so a changed download would not be detected.`));
+      if (unchecked <= MAXIMUM_PER_RULE)
+        findings.push(
+          finding("lockfile-integrity", "package-lock.json", `${path} has no integrity hash, so a changed download would not be detected.`),
+        );
     }
   }
 }

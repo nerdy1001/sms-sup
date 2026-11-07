@@ -3,7 +3,13 @@ export type Layer = "domain" | "application" | "infrastructure" | "http";
 export const LAYERS: readonly Layer[] = ["domain", "application", "infrastructure", "http"];
 
 export type Where =
-  | { readonly kind: "module"; readonly app: string; readonly module: string; readonly layer: Layer | "root" | "other"; readonly test: boolean }
+  | {
+      readonly kind: "module";
+      readonly app: string;
+      readonly module: string;
+      readonly layer: Layer | "root" | "other";
+      readonly test: boolean;
+    }
   | { readonly kind: "kernel"; readonly app: string; readonly test: boolean }
   | { readonly kind: "app"; readonly app: string; readonly test: boolean }
   | { readonly kind: "package"; readonly name: string; readonly test: boolean }
@@ -15,8 +21,13 @@ const KERNEL_PATH = /^apps\/([^/]+)\/src\/kernel\//;
 const APP_PATH = /^apps\/([^/]+)\/src\//;
 const PACKAGE_PATH = /^packages\/([^/]+)\/src\//;
 
+/**
+ * Test files: `*.test.ts` (run by node:test), `*.spec.ts` and `*.spec.tsx` (run by vitest in the web
+ * applications, whose `*.test.ts` pattern belongs to node:test), and the helpers that tests share, which
+ * live in a folder called test-support.
+ */
 export function isTestFile(file: string): boolean {
-  return /\.test\.ts$/.test(file);
+  return /\.(test\.tsx?|spec\.tsx?)$/.test(file) || /(^|\/)test-support\//.test(file);
 }
 
 export function locate(file: string): Where {

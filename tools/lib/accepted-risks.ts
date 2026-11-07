@@ -40,7 +40,7 @@ export function loadAcceptedRisks(root: string, today: Date = new Date()): Loade
     problem("The file is not valid JSON.");
     return { active, findings };
   }
-  const entries = typeof parsed === "object" && parsed !== null && "accepted" in parsed ? (parsed as { accepted: unknown }).accepted : undefined;
+  const entries = typeof parsed === "object" && parsed !== null && "accepted" in parsed ? parsed.accepted : undefined;
   if (!Array.isArray(entries)) {
     problem('Expected an object of the form { "accepted": [ ... ] }.');
     return { active, findings };
@@ -54,11 +54,15 @@ export function loadAcceptedRisks(root: string, today: Date = new Date()): Loade
     const reason = typeof record.reason === "string" ? record.reason.trim() : "";
     const expires = typeof record.expires === "string" ? record.expires : "";
     if (id === "") return problem(`${label} has no "id" (an advisory id such as GHSA-xxxx-xxxx-xxxx, or secret:<commit>:<file>:<rule>).`);
-    if (reason.length < 20) return problem(`${label} (${id}) needs a reason of at least 20 characters: why the risk is acceptable and what limits it.`);
+    if (reason.length < 20)
+      return problem(`${label} (${id}) needs a reason of at least 20 characters: why the risk is acceptable and what limits it.`);
     const end = parseDay(expires);
     if (end === undefined) return problem(`${label} (${id}) needs "expires" as YYYY-MM-DD.`);
     if (end < startOfToday) return problem(`${label} (${id}) expired on ${expires}. Fix the cause, or decide again and set a new date.`);
-    if (end - startOfToday > MAXIMUM_DAYS * DAY) return problem(`${label} (${id}) expires more than ${MAXIMUM_DAYS} days from now. Accept a risk for at most ${MAXIMUM_DAYS} days at a time.`);
+    if (end - startOfToday > MAXIMUM_DAYS * DAY)
+      return problem(
+        `${label} (${id}) expires more than ${MAXIMUM_DAYS} days from now. Accept a risk for at most ${MAXIMUM_DAYS} days at a time.`,
+      );
     if (active.has(id)) return problem(`${label} repeats the id ${id}.`);
     active.set(id, { id, reason, expires });
   });

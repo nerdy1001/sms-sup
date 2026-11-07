@@ -22,7 +22,10 @@ test("a clean project passes", () => {
 
 test("a secret in any text file is reported with its place, masked", () => {
   const result = run({ "docs/setup.md": `Line one\nkey: ${AWS}\n` });
-  assert.deepEqual(result.findings.map((item) => [item.rule, item.file, item.line]), [["secret-aws-access-key", "docs/setup.md", 2]]);
+  assert.deepEqual(
+    result.findings.map((item) => [item.rule, item.file, item.line]),
+    [["secret-aws-access-key", "docs/setup.md", 2]],
+  );
   assert.ok(!(result.findings[0]?.message ?? "").includes(AWS));
 });
 
@@ -34,7 +37,10 @@ test("a forbidden file name is reported even when the file is empty", () => {
 test("an allowed example is listed as a suppression, not a finding", () => {
   const result = run({ "docs/a.md": `<!-- secrets-allow: aws-access-key -- the vendor documentation example -->\n${AWS}\n` });
   assert.deepEqual(result.findings, []);
-  assert.deepEqual(result.suppressions.map((item) => item.rule), ["secret-aws-access-key"]);
+  assert.deepEqual(
+    result.suppressions.map((item) => item.rule),
+    ["secret-aws-access-key"],
+  );
 });
 
 test("the lock file and binary files are not scanned", () => {

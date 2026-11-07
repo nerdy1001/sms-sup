@@ -14,7 +14,7 @@ checks turn those facts into something a tired developer cannot break by acciden
 |---|---|---|
 | `zone-isolation` | `core-api` and `staff-web` importing `portal-api` or `portal-web`, and the reverse. Web applications importing API applications. Any application importing another. | The two zones run in different places with different exposure. Code that crosses the line today becomes a data path tomorrow. |
 | `package-no-app-import` | Shared packages importing application code. | A shared package that knows an application is no longer shared. |
-| `contracts-purity` | `packages/contracts` using Node modules, other packages, or libraries other than the allowed schema library. | The contracts are the only code both zones share. It must be data shapes only. |
+| `contracts-purity` | `packages/contracts` using Node modules (its test files may use the test runner and assertions), other packages, or libraries other than the allowed schema library. | The contracts are the only code both zones share. It must be data shapes only. |
 | `no-deep-package-import` | Importing a package by a path into its source, or with a sub-path. | A package has one public entry. |
 
 ## Modules
@@ -76,7 +76,7 @@ helper accepts only fixed query text with parameters, which closes that gap.
 |---|---|---|
 | `no-any`, `no-non-null`, `no-ts-ignore` | The `any` type, the `!` operator, silencing the type checker (an expect-error directive is allowed with a written reason). | `unknown` and narrowing; a real fix. |
 | `no-default-export` | Default exports. | Named exports. |
-| `no-console` | `console` in application code. | The kernel logger (FN-05), which keeps personal data out of logs. |
+| `no-console` | `console` in application code. | The kernel logger (`kernel/logging`), which keeps personal data out of logs. |
 | `no-process-env` | `process.env` outside `kernel/config` and `main.ts`. | Validated configuration. |
 | `no-float-money` | `toFixed`, `parseFloat`. | Money is a whole number of the local currency. |
 | `no-math-random` | `Math.random`. | `randomInt` or `randomBytes` from `node:crypto`. |
@@ -105,13 +105,43 @@ These run on application and package code (not on tests or `tools`).
 | `cors-open` | `origin: "*"` or `origin: true`. | A list of allowed origins. |
 | `insecure-url` | A plain `http://` address except localhost. | HTTPS. |
 
+## Audit log
+
+These are enforced when the application starts, not by the file checks. Details in
+[ADR 0009](adr/0009-audit-hooks.md) and [guide 6](guide/06-writing-a-route.md).
+
+| Rule | What it forbids | Instead |
+|---|---|---|
+| Audit declaration | A route that is not public and changes data (POST, PUT, PATCH, DELETE) without `config: { audit: { action, objectType } }`. | Declare the action, for example `scholar.update`. |
+| Public routes | A public route that declares an audit action, or uses `request.transaction`. | Nobody is signed in to be recorded; sign-in itself is handled by AC-01. |
+| Recorded or refused | A route that declares an action and answers with success without having recorded it. | Do the work in `request.transaction`. |
+| Safe detail | A key that names personal data, or a value that looks like an e-mail address, in the detail of an entry. | Record an identifier or a code. |
+
+## Web applications (front end)
+
+These rules run on code in `apps/*-web` only. Code that runs in a browser can be read and changed by whoever
+uses it, so there is no secret and no trust in it. What matters is what the page can be made to do with the
+session and with what the person sees. Exceptions are written `web-ignore: <rule> -- <reason>` and stay
+visible in every report. The coding standards (no `any`, no default export, no `console`, whitespace) apply
+to `.tsx` files too.
+
+| Rule | What it forbids | Instead |
+|---|---|---|
+| `web-browser-storage` | `localStorage`, `sessionStorage`, `indexedDB`, `caches`, `document.cookie`. | Keep state in memory. The session cookie is set by the API, httpOnly. One decided exception: the language code, in `i18n/language-preference.ts` (ADR 0008, decision 3). |
+| `web-raw-html` | `dangerouslySetInnerHTML`, `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`, and `eval`-style calls. | Let React write the text. |
+| `web-network-location` | `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `sendBeacon` outside `src/api`. | One client (`src/api/client.ts`) makes every call. |
+| `web-node-builtin` | Imports of Node modules in browser code. | Nothing in the browser needs them. |
+| `web-external-origin` | An address on another origin. | Same-origin calls only. |
+| `web-target-blank` | A link that opens a new tab without `rel="noopener noreferrer"`. | Add the attribute. |
+| `web-html` | In `index.html`: inline scripts, inline styles, event attributes, and anything loaded from another address. | Files served with the page; the staging policy blocks the rest. |
+
 ## Secrets and data files
 
 | Rule | What it forbids | Instead |
 |---|---|---|
 | `secret-<kind>` (for example `secret-aws-access-key`, `secret-jwt`, `secret-credential-url`, `secret-secret-assignment`) | A key, token, signed token, or password in any text file, and in any commit of the history. | Read it from the environment (kernel configuration) and rotate it if it was ever real. |
 | `secret-file` | `.env` files (but not `.env.example`), key and certificate files, private SSH keys. | Keep them outside the repository. |
-| `data-file` | Spreadsheets, database files and dumps (error); CSV files (warning). | Synthetic data only (task FN-08). |
+| `data-file` | Spreadsheets, database files and dumps (error); CSV files (warning). | Synthetic data only (task FN-08, `npm run seed:data`). |
 
 ## Dependencies
 
@@ -123,6 +153,16 @@ These run on application and package code (not on tests or `tools`).
 | `lockfile-missing` | (Warning.) No `package-lock.json`. | `npm install`, then commit the file. |
 | `npmrc-policy` | `.npmrc` without `ignore-scripts=true` and `save-exact=true`. | Restore the settings. |
 | `accepted-risk` | A malformed, expired or too long (over 90 days) entry in `security/accepted-risks.json`. | Fix the cause, or decide again with a new date. |
+
+Libraries also need a row in the register, `docs/dependencies.md` (see [ADR 0007](adr/0007-web-framework-and-libraries.md)):
+
+| Rule | What it forbids | Instead |
+|---|---|---|
+| `register-missing` | A repository with libraries and no `docs/dependencies.md`. | Create the register. |
+| `register-unregistered` | A library declared in a `package.json` that has no row in the register. | Add the row in the same pull request. |
+| `register-incomplete` | A row with an empty column, or a "what it is for" shorter than twelve characters. | Answer all four questions: what for, why not by hand, if abandoned, where it may be imported. |
+| `register-usage` | A row whose "Used by" does not list a workspace that declares the library. | List `root`, `core-api`, `portal-api` or `contracts` as appropriate. |
+| `register-stale` | (Warning.) A row for a library that no workspace declares any more. | Remove the row. |
 
 The audit job adds a rule the files cannot show: a high or critical vulnerability in a production
 dependency blocks the merge unless it is accepted in `security/accepted-risks.json`.

@@ -24,8 +24,8 @@ NestJS ideas that matter are kept, as conventions that the tooling enforces:
 | Guards and interceptors | Hooks on routes for authorisation and audit (AC and FN-07) |
 | Configuration module | One validated configuration object, read once at start-up in `kernel/config` (FN-05) |
 
-The web framework is chosen in FN-05. Fastify is the likely choice (route schemas and encapsulated
-plugins match the module idea); Express is acceptable. Nothing in this repository depends on it yet.
+The web framework was chosen in FN-05: Fastify, with zod for schemas (see
+[ADR 0007](0007-web-framework-and-libraries.md)). Route schemas and encapsulated plugins match the module idea.
 
 TypeScript runs without a build step in development and in tests (Node 22.18 or later removes the
 types when it loads a file). The compiler is used to check types. Files therefore import each other

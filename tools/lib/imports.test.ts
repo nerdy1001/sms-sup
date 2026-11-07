@@ -33,8 +33,17 @@ test("finds static, type-only, re-export and dynamic imports", () => {
 
 test("reports computed dynamic imports and require calls", () => {
   const { imports, computed } = scan('const name = "x";\nawait import(name);\nconst y = require("./y.ts");\nrequire(name);');
-  assert.deepEqual(imports.map((item) => [item.specifier, item.kind]), [["./y.ts", "require"]]);
-  assert.deepEqual(computed.map((item) => [item.kind, item.line]), [["dynamic", 2], ["require", 4]]);
+  assert.deepEqual(
+    imports.map((item) => [item.specifier, item.kind]),
+    [["./y.ts", "require"]],
+  );
+  assert.deepEqual(
+    computed.map((item) => [item.kind, item.line]),
+    [
+      ["dynamic", 2],
+      ["require", 4],
+    ],
+  );
 });
 
 test("does not mistake text in strings or comments for imports", () => {

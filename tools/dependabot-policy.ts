@@ -12,7 +12,12 @@ export interface PolicyResult {
   readonly reason: string;
 }
 
-const ALLOWED_FILES = [/^package\.json$/, /^package-lock\.json$/, /^(apps|packages)\/[^/]+\/package\.json$/, /^\.github\/workflows\/[^/]+\.ya?ml$/];
+const ALLOWED_FILES = [
+  /^package\.json$/,
+  /^package-lock\.json$/,
+  /^(apps|packages)\/[^/]+\/package\.json$/,
+  /^\.github\/workflows\/[^/]+\.ya?ml$/,
+];
 
 /**
  * Decides whether a Dependabot pull request may merge by itself once every check has passed.
@@ -30,7 +35,8 @@ export function evaluateDependabotPr(input: PolicyInput): PolicyResult {
 
   const outside = input.files.filter((file) => !ALLOWED_FILES.some((pattern) => pattern.test(file)));
   if (input.files.length === 0) return { merge: false, reason: "The list of changed files is empty." };
-  if (outside.length > 0) return { merge: false, reason: `The pull request changes files other than dependency files: ${outside.join(", ")}.` };
+  if (outside.length > 0)
+    return { merge: false, reason: `The pull request changes files other than dependency files: ${outside.join(", ")}.` };
   return { merge: true, reason: `All ${types.length} update(s) are patch or minor and touch only dependency files.` };
 }
 
@@ -41,7 +47,10 @@ function main(): void {
     process.exitCode = 2;
     return;
   }
-  const files = readFileSync(filesFile, "utf8").split("\n").map((line) => line.trim()).filter((line) => line !== "");
+  const files = readFileSync(filesFile, "utf8")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
   const result = evaluateDependabotPr({ messages: readFileSync(messagesFile, "utf8"), files });
   console.log(result.merge ? `Merge: ${result.reason}` : `Not merging: ${result.reason}`);
   process.exitCode = result.merge ? 0 : 1;

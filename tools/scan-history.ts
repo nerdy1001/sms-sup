@@ -16,12 +16,25 @@ export function findingsFromHistory(diff: string, fileNames: readonly string[], 
   for (const item of scanDiff(diff)) {
     const id = historyId(item.commit, item.file, item.hit.rule);
     if (accepted.has(id)) continue;
-    found.push(finding(`secret-${item.hit.rule}`, item.file === "" ? `commit ${item.commit}` : item.file, `Commit ${item.commit} added ${item.hit.description} (${item.hit.preview}). Rotate it now: deleting the line does not remove it from history. To accept a false alarm, add the id "${id}" to security/accepted-risks.json.`, item.line));
+    found.push(
+      finding(
+        `secret-${item.hit.rule}`,
+        item.file === "" ? `commit ${item.commit}` : item.file,
+        `Commit ${item.commit} added ${item.hit.description} (${item.hit.preview}). Rotate it now: deleting the line does not remove it from history. To accept a false alarm, add the id "${id}" to security/accepted-risks.json.`,
+        item.line,
+      ),
+    );
   }
   for (const name of new Set(fileNames)) {
     const byName = checkFileName(name);
     if (byName !== undefined && byName.severity === "error" && !accepted.has(`secret-file:${name}`)) {
-      found.push(finding(byName.rule, name, `${byName.message} The file was added at some point in the history. To accept a false alarm, add the id "secret-file:${name}" to security/accepted-risks.json.`));
+      found.push(
+        finding(
+          byName.rule,
+          name,
+          `${byName.message} The file was added at some point in the history. To accept a false alarm, add the id "secret-file:${name}" to security/accepted-risks.json.`,
+        ),
+      );
     }
   }
   return found;
@@ -38,9 +51,13 @@ function main(): void {
   let names: string[];
   try {
     diff = git(root, ["log", "--all", "-p", "-U0", "--no-color", "--no-ext-diff", "--format=commit %H"]);
-    names = git(root, ["log", "--all", "--name-only", "--format="]).split("\n").filter((line) => line !== "");
+    names = git(root, ["log", "--all", "--name-only", "--format="])
+      .split("\n")
+      .filter((line) => line !== "");
   } catch {
-    console.log("error   history\n        Git could not read the history. Run this inside a git repository with its full history (in CI: fetch-depth 0). A scan that cannot read the history fails.");
+    console.log(
+      "error   history\n        Git could not read the history. Run this inside a git repository with its full history (in CI: fetch-depth 0). A scan that cannot read the history fails.",
+    );
     process.exitCode = 1;
     return;
   }

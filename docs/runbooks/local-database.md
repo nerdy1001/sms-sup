@@ -1,7 +1,7 @@
 # Runbook: the database on your computer
 
 How to start the development database, apply the migrations, add the synthetic data, and start again.
-It needs Docker (Docker Desktop on Windows or macOS) and Node 22.18 or later. Everything runs in a
+It needs Docker (Docker Desktop on Windows or macOS) and Node 22.18 or later. The commands talk to the database through the same driver the application uses, so `psql` is not needed on your computer. Everything runs in a
 container bound to your own computer (`127.0.0.1`), so nothing is reachable from outside.
 
 ## First time
@@ -29,7 +29,7 @@ npm run db:status
 npm run db:psql
 ```
 
-`db:psql` opens a SQL prompt inside the container. Try `select email, role from platform.users;` (type
+`db:psql` opens a SQL prompt inside the container (this is the one command that uses Docker directly). Try `select email, role from platform.users;` (type
 `\q` to leave). You see the four staff members, because you are connected as the owner of the database,
 which is allowed to see everything. The application will connect as a different role that is not.
 
@@ -97,6 +97,15 @@ select email from platform.users;                    -- only the attache's own r
 commit;
 reset role;
 ```
+
+## Pointing the commands at another database
+
+By default the commands connect to `127.0.0.1:5432` as the user `sms` with no password, which is the
+container of `npm run db:up`. To use another PostgreSQL, set the usual variables: `PGHOST`, `PGPORT`,
+`PGUSER`, `PGDATABASE`, and `PGPASSWORD` (or `PGPASSWORD_FILE`, the path of a file that holds the
+password). `npm run db:reset` refuses to touch a database that is not on your own computer unless you also
+set `SMS_ALLOW_REMOTE_RESET=yes`. The old setting `SMS_DB_MODE` no longer exists: the commands no longer
+go through `psql`, so there is nothing to choose.
 
 ## Running the database tests
 

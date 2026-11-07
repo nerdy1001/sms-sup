@@ -44,8 +44,31 @@ shaped it:
    catcher cannot send real email and the application cannot call out.
 8. **Secrets are made on the server.** The database password is generated on the server and never exists
    in the repository, in GitHub, or on any other machine. The only secret in GitHub is the deploy key.
-9. **A placeholder service proves the path.** The application has no web server until FN-05, so FN-03
-   deploys the smallest possible one (a health endpoint), placed where the real server will live.
+9. **A placeholder service proves the path.** The application had no web server until FN-05, so FN-03
+   deployed the smallest possible one (a health endpoint), placed where the real server would live. FN-05
+   replaced it with the real application; `/health` still answers with the version, as the deploy script expects.
+10. **The database is migrated by the deployment, from the image about to start.** Added after FN-05.
+    - **How.** After it loads the image, `staging-deploy.sh` starts only the database service, takes a backup
+      (except on the very first deployment, when there is nothing to copy), and runs a one-off container
+      (`migrate` in the Compose file, in the `tools` profile so that `up` never starts it) made from the new
+      image. It runs `node tools/db/cli.ts provision`: apply the pending migrations as the database owner, then
+      give the application role its password. Only then does the new version start. If the migration fails,
+      nothing new starts and the running version is not touched.
+    - **Why from the image.** The image already holds the migration files that belong to that exact commit, so
+      the files and the code cannot drift apart, and nothing has to be copied to the server or installed on it.
+      The runner uses the `pg` driver instead of `psql`, so the image needs no extra program. Only `tools/db`
+      and one helper are copied into the image, not the rest of `tools/`.
+    - **Two passwords.** The owner of the database (used by `postgres` and by the migration job) and the
+      application role `sms_app` have different passwords, both made on the server by `init-staging.sh`. The
+      running application can read only its own. A flaw in the application therefore does not hand over the
+      power to change the structure of the database or switch off row-level security.
+    - **Rollback does not migrate.** Going back to the previous release starts the old image against a database
+      that has already moved forward, and the old image does not contain the newest migration files (the runner
+      would refuse it for that reason). So the old version has to work with the new structure. The rule for
+      every migration is: add before you remove. A new column is added in one release and the code starts using
+      it in the same or a later one; a column is dropped only in a release after nothing reads it. The backup
+      taken just before is the way out of a migration that was wrong for both versions.
+    - **Not covered.** Seeds are not run on staging by this step. The synthetic data of staging is task FN-08.
 
 ## Consequences
 
@@ -60,6 +83,8 @@ shaped it:
 - **Image tags were chosen from memory and are not verified.** The deploy script checks that each image
   exists before changing anything, and Dependabot proposes updates, but a wrong tag shows up at the first
   deployment, not before.
+- **A migration changes data that cannot be recovered by rolling back the code.** The backup before each
+  migration limits the damage to the last night's changes at worst, on a server whose data is synthetic.
 - **None of it has run.** The scripts were tested against a fake Docker. The server file, the Compose
   file's behaviour under a real Docker, the Tailscale certificate path and the pipeline job are untested
   until the first deployment.

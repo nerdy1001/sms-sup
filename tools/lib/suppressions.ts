@@ -16,10 +16,23 @@ export function applySuppressions(file: string, comments: readonly SourceComment
     if (match === null) continue;
     const reason = (match[2] ?? "").trim();
     if (reason.length < 10) {
-      extra.push(finding("suppression-reason", file, `A suppression needs a reason: "${tag}: <rule> -- <reason of at least 10 characters>".`, comment.line));
+      extra.push(
+        finding(
+          "suppression-reason",
+          file,
+          `A suppression needs a reason: "${tag}: <rule> -- <reason of at least 10 characters>".`,
+          comment.line,
+        ),
+      );
       continue;
     }
-    active.push({ rule: match[1] ?? "", reason, line: comment.line, lines: comment.ownLine ? [comment.line, comment.line + 1] : [comment.line], used: false });
+    active.push({
+      rule: match[1] ?? "",
+      reason,
+      line: comment.line,
+      lines: comment.ownLine ? [comment.line, comment.line + 1] : [comment.line],
+      used: false,
+    });
   }
 
   const kept: Finding[] = [];
@@ -35,7 +48,9 @@ export function applySuppressions(file: string, comments: readonly SourceComment
   }
   for (const entry of active) {
     if (!entry.used) {
-      extra.push(finding("unused-suppression", file, `This suppression of "${entry.rule}" matches nothing. Remove it.`, entry.line, "warning"));
+      extra.push(
+        finding("unused-suppression", file, `This suppression of "${entry.rule}" matches nothing. Remove it.`, entry.line, "warning"),
+      );
     }
   }
   return { findings: [...kept, ...extra], suppressions: applied };

@@ -15,6 +15,9 @@
 | `npm run typecheck` | Only the TypeScript compiler. |
 | `npm run check:rules` | Only the rules robot. |
 | `npm test` | Only the tests. |
+| `npm run dev` | Starts the staff API on `http://127.0.0.1:3000`, restarting when a file changes. Needs the database. |
+| `npm run api:docs` | Rewrites `docs/api/openapi.json` after you change a route. A test fails until you do. |
+| `npm run seed:data -- --count 500` | Writes a synthetic dataset to a JSON file (people, schools, years, documents, payments, with labelled awkward cases). Nothing is loaded into the database. |
 | `npm run new:module -- <CODE>` | Creates a module. |
 | `npm run db:up`, `db:migrate`, `db:seed`, `db:reset` | The local database: start it, apply migrations, add synthetic data, start again (see below). |
 | `npm run render:cloud-init` | Rebuilds the staging server file after you change a script in `infra/staging/bin`. The check fails until you do. |
@@ -85,6 +88,20 @@ applied (the runner refuses). `npm run db:reset` starts again from nothing on yo
 needs row-level security and policies; `npm run check` tells you what is missing. The steps, and what to do
 when something fails, are in [the local database runbook](../runbooks/local-database.md). The database tests
 in `npm test` use a temporary server of their own, or are skipped with a message when none can be started.
+
+## Running the API
+
+`npm run db:up` and `npm run db:migrate`, then `npm run dev`. The API answers on `http://127.0.0.1:3000`.
+`/health` says the program is running; `/ready` says it can reach the database. Every route that is not
+public answers 401 until the sign-in task (AC-01) exists; there is no development login on purpose. The
+logs are JSON lines, one per request, with no personal data. To write a route, read
+[6. Writing a route](06-writing-a-route.md).
+
+### Readable logs
+
+JSON lines are what staging and production print, and they are hard to read by eye. `npm run dev` shows them
+in a readable form through the library `pino-pretty` (installed, with its row in `docs/dependencies.md`), and
+prints JSON if the library is missing. To see plain JSON again for one run, set `SMS_LOG_PRETTY=off`.
 
 ## Staging
 
