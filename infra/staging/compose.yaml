@@ -86,7 +86,7 @@ services:
     networks: [data]
 
   postgres:
-    image: postgres:17.5-alpine
+    image: postgres:17.10-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: sms
