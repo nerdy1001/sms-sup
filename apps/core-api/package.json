@@ -5,7 +5,7 @@
   "type": "module",
   "dependencies": {
     "@fastify/helmet": "13.2.0",
-    "@fastify/rate-limit": "11.2.1",
+    "@fastify/rate-limit": "11.2.2",
     "@fastify/swagger": "9.9.2",
     "@minesup/contracts": "*",
     "fastify": "5.12.7",
