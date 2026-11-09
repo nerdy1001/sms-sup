@@ -109,7 +109,7 @@ services:
 
   # Catches every email the application sends, so that nothing reaches a real mailbox.
   mailpit:
-    image: axllent/mailpit:v1.27.7
+    image: axllent/mailpit:v1.33.0
     restart: unless-stopped
     environment:
       MP_MAX_MESSAGES: "500"
